@@ -341,13 +341,13 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self, networkInterface = 'eno1', simulation_mode = False):
+    def __init__(self, networkInterface = 'eno1', motion_mode = False, simulation_mode = False):
         self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
         self.tauff_target = np.zeros(10)
-
+        self.motion_mode = motion_mode
         self.kp_high = 300.0
         self.kd_high = 3.0
         self.kp_low = 80.0
@@ -365,7 +365,10 @@ class G1_23_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0, networkInterface)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
+        if self.motion_mode:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
+        else:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -439,6 +442,9 @@ class G1_23_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
+        if self.motion_mode:
+            self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
+
         while True:
             start_time = time.time()
 
@@ -504,6 +510,10 @@ class G1_23_ArmController:
         while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
+                if self.motion_mode:
+                    for weight in np.arange(1, 0, -0.01):
+                        self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
+                        time.sleep(0.02)
                 logger_mp.info("[G1_23_ArmController] both arms have reached the home position.")
                 break
             current_attempts += 1
