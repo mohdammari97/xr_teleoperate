@@ -443,7 +443,7 @@ class G1_23_ArmController:
 
     def _ctrl_motor_state(self):
         if self.motion_mode:
-            self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
+            self.msg.motor_cmd[G1_23_JointIndex.kNotUsedJoint0].q = 1.0;
 
         while True:
             start_time = time.time()
