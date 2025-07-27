@@ -512,7 +512,7 @@ class G1_23_ArmController:
             if np.all(np.abs(current_q) < tolerance):
                 if self.motion_mode:
                     for weight in np.arange(1, 0, -0.01):
-                        self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
+                        self.msg.motor_cmd[G1_23_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
                 logger_mp.info("[G1_23_ArmController] both arms have reached the home position.")
                 break
