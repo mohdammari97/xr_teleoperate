@@ -228,7 +228,7 @@ class G1_29_ArmController:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 if self.motion_mode:
-                    for weight in np.arange(1, 0, -0.01):
+                    for weight in np.linspace(1, 0, num=101):
                         self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
                 logger_mp.info("[G1_29_ArmController] both arms have reached the home position.")
@@ -500,18 +500,18 @@ class G1_23_ArmController:
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
-        logger_mp.info("[G1_23_ArmController] ctrl_dual_arm_go_home start...")
+        logger_mp.info("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
         max_attempts = 100
         current_attempts = 0
         with self.ctrl_lock:
-            self.q_target = np.zeros(10)
-            # self.tauff_target = np.zeros(10)
+            self.q_target = np.zeros(14)
+            # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
         while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 if self.motion_mode:
-                    for weight in np.arange(1, 0, -0.01):
+                    for weight in np.linspace(1, 0, num=101):
                         self.msg.motor_cmd[G1_23_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
                 logger_mp.info("[G1_23_ArmController] both arms have reached the home position.")
@@ -1113,10 +1113,10 @@ if __name__ == "__main__":
     from robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
     import pinocchio as pin 
 
-    arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
-    arm = G1_29_ArmController(simulation_mode=True)
-    # arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = False)
-    # arm = G1_23_ArmController()
+    #arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
+    #arm = G1_29_ArmController(simulation_mode=True)
+    arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = False)
+    arm = G1_23_ArmController()
     # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = False)
     # arm = H1_2_ArmController()
     # arm_ik = H1_ArmIK(Unit_Test = True, Visualization = True)
