@@ -232,7 +232,6 @@ class ActiveCameraController:
                 # Calculate relative rotation from initial position
                 relative_rotation = current_head_rotation * self.initial_head_rotation.inv()
                 euler_angles = relative_rotation.as_euler('xyz', degrees=True)
-                logger_mp.debug(f'{euler_angles}')
                 # Extract pitch and yaw changes
                 pitch_delta_deg = -euler_angles[0]  # Rotation around Y-axis
                 yaw_delta_deg = -euler_angles[1]   # Rotation around Z-axis (inverted)
