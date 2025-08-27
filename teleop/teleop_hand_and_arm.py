@@ -75,6 +75,12 @@ if __name__ == '__main__':
     parser.add_argument('--camera-safe-mode', action='store_true', default=False, help='Enable safe mode with limited camera movement')
     parser.add_argument('--camera-max-movement', type=float, default=60.0, help='Maximum camera movement in degrees from start position')
 
+    # Speed Limit
+    parser.add_argument('--arm-speed', type=float, default=10.0, 
+                      help='Set the arm velocity limit (default is controller-specific)')
+    parser.add_argument('--no-gradual-speed', action='store_true',
+                      help='Disable gradual speed increase')
+
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
 
@@ -180,6 +186,9 @@ if __name__ == '__main__':
     if args.arm == "G1_29":
         arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
         arm_ik = G1_29_ArmIK()
+        if args.arm_speed is not None:
+            arm_ctrl.arm_velocity_limit = args.arm_speed
+            logger_mp.info(f"Setting custom arm velocity limit: {args.arm_speed}")
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
         arm_ik = G1_23_ArmIK()
@@ -189,7 +198,6 @@ if __name__ == '__main__':
     elif args.arm == "H1":
         arm_ctrl = H1_ArmController(simulation_mode=args.sim)
         arm_ik = H1_ArmIK()
-
     # active camera
     camera_controller = None
     if args.use_active_cam:
@@ -267,7 +275,12 @@ if __name__ == '__main__':
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
         while not start_signal:
             time.sleep(0.01)
-        arm_ctrl.speed_gradual_max()
+        
+        if not args.no_gradual_speed:
+            arm_ctrl.speed_gradual_max()
+            logger_mp.info("Gradual speed increase enabled")
+        else:
+            logger_mp.info("Gradual speed increase disabled")
         
         # Enable head tracking if active camera is available
         if camera_controller:
