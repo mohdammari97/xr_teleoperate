@@ -19,6 +19,8 @@ sys.path.append(parent_dir)
 from teleop.robot_control.dynamixel.active_cam import DynamixelAgent
 from teleop.robot_control.dynamixel.error_analyzer import DynamixelErrorAnalyzer
 
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 
 class ActiveCameraController:
     """Controller for the active camera servo system using DynamixelAgent with threaded head tracking."""
@@ -230,10 +232,10 @@ class ActiveCameraController:
                 # Calculate relative rotation from initial position
                 relative_rotation = current_head_rotation * self.initial_head_rotation.inv()
                 euler_angles = relative_rotation.as_euler('xyz', degrees=True)
-                
+                logger_mp.debug(f'{euler_angles}')
                 # Extract pitch and yaw changes
-                pitch_delta_deg = euler_angles[1]  # Rotation around Y-axis
-                yaw_delta_deg = -euler_angles[2]   # Rotation around Z-axis (inverted)
+                pitch_delta_deg = -euler_angles[0]  # Rotation around Y-axis
+                yaw_delta_deg = -euler_angles[1]   # Rotation around Z-axis (inverted)
                 
                 # Apply scaling factor
                 scaling_factor = 0.1 if self.safe_mode else 1.0

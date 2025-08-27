@@ -11,7 +11,7 @@ logger_mp = logging_mp.get_logger(__name__)
 class ImageClient:
     def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None,
                  active_cam_img_shape = None, active_cam_img_shm_name = None, use_active_camera = False,
-                 image_show = False, server_address = "192.168.123.164", port = 8012, Unit_Test = False):
+                 image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False):
         """
         tv_img_shape: User's expected head camera resolution shape (H, W, C). It should match the output of the image service terminal.
 
@@ -157,13 +157,16 @@ class ImageClient:
             logger_mp.info(f"Active camera client connected to port {self._port + 1}")
 
         logger_mp.info("Image client has started, waiting to receive data...")
+        logger_mp.info(f"Connected to RUNNING at {self.running}:{self._active_socket}, Active Camera: {self.use_active_camera}")
         try:
             while self.running:
-                if self.use_active_camera and self._active_socket:
+                if self.use_active_camera:
                     # Receive both streams when active camera is enabled
+                    logger_mp.debug("Receiving dual streams (active camera + recording stream)...")
                     self._receive_dual_streams()
                 else:
                     # Receive single concatenated stream
+                    logger_mp.debug("Receiving single concatenated stream (head + wrist)...")
                     self._receive_single_stream()
 
         except KeyboardInterrupt:
@@ -222,10 +225,10 @@ class ImageClient:
                 active_message = self._active_socket.recv(zmq.NOBLOCK)
                 np_img = np.frombuffer(active_message, dtype=np.uint8)
                 active_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-                if active_image is not None and self.tv_enable_shm:
+                if active_image is not None and self.active_cam_enable_shm:
                     # Resize active camera image to VR display resolution
-                    resized_active = cv2.resize(active_image, (self.tv_img_shape[1], self.tv_img_shape[0]))
-                    np.copyto(self.tv_img_array, resized_active)
+                    resized_active = cv2.resize(active_image, (self.active_cam_img_shape[1], self.active_cam_img_shape[0]))
+                    np.copyto(self.active_cam_img_array, resized_active)
         except zmq.Again:
             pass  # No active camera message available
 
@@ -277,14 +280,14 @@ class ImageClient:
         image_width = current_image.shape[1]
         
         # Extract active camera recording resolution
-        if self.active_cam_enable_shm:
-            active_cam_width = self.active_cam_img_shape[1]
-            active_cam_region = current_image[:, :active_cam_width]
-            np.copyto(self.active_cam_img_array, active_cam_region)
+        if self.tv_enable_shm:
+            tv_cam_width = self.tv_img_shape[1]
+            tv_cam_region = current_image[:, :tv_cam_width]
+            np.copyto(self.tv_img_array, tv_cam_region)
         
         # Extract wrist cameras if present
         if self.wrist_enable_shm:
-            wrist_start = self.active_cam_img_shape[1] if self.active_cam_enable_shm else 0
+            wrist_start = self.tv_img_shape[1] if self.tv_enable_shm else 0
             wrist_region = current_image[:, wrist_start:wrist_start + self.wrist_img_shape[1]]
             np.copyto(self.wrist_img_array, wrist_region)
 
