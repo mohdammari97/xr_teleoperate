@@ -8,7 +8,7 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import ( LowCmd_  as hg_LowCmd, LowS
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.utils.crc import CRC
 
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import ( LowCmd_  as go_LowCmd, LowState_ as go_LowState)  # idl for h1
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import ( LowCmd_  as go_LowCmd, LowState_ as go_LowState, SportModeState_ as hg_SportModeState)  # idl for h1
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
 
 import logging_mp
@@ -378,7 +378,9 @@ class G1_23_ArmController:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
+        self.odometry_subscriber = ChannelSubscriber("rt/odommodestate",hg_SportModeState)
         self.lowstate_subscriber.Init()
+        self.odometry_subscriber.Init()
         self.lowstate_buffer = DataBuffer()
 
         # initialize subscribe thread
@@ -433,11 +435,13 @@ class G1_23_ArmController:
     def _subscribe_motor_state(self):
         while True:
             msg = self.lowstate_subscriber.Read()
-            if msg is not None:
+            msg_high = self.odometry_subscriber.Read()
+            if msg and msg_high is not None:
                 lowstate = G1_23_LowState()
                 for id in range(G1_23_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
+                robot_vel = list(msg_high.velocity)
                 self.lowstate_buffer.SetData(lowstate)
             time.sleep(0.002)
 

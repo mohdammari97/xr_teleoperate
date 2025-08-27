@@ -102,7 +102,7 @@ class OpenCVCamera():
 
 
 class ImageServer:
-    def __init__(self, config, port = 5555, Unit_Test = False):
+    def __init__(self, config, port = 8012, Unit_Test = False):
         """
         config example1:
         {
