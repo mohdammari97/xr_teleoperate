@@ -1,0 +1,32 @@
+retargeting:
+  type: DexPilot
+  urdf_path: unitree_hand/unitree_dex3_right.urdf
+  
+  # Source refers to the retargeting input, which usually corresponds to the human hand
+  # The joint indices of human hand joint which corresponds to each link in the target_link_names
+  # Based on the Hand Joint index from https://support.unitree.com/home/en/G1_developer/dexterous_hand
+  target_joint_names: 
+    [
+      "right_hand_thumb_0_joint", # 0
+      "right_hand_thumb_1_joint", # 1
+      "right_hand_thumb_2_joint", # 2
+      "right_hand_middle_0_joint", # 3
+      "right_hand_middle_1_joint", # 4
+      "right_hand_index_0_joint", # 5
+      "right_hand_index_1_joint", # 6
+    ]
+  # The link on the robot hand which corresponding to the wrist of human hand
+  wrist_link_name: "base_link"
+  # DexPilot retargeting link names
+  finger_tip_link_names: ["thumb_tip", "index_tip", "middle_tip"]
+
+  # Optimization parameters
+  normal_delta: 4e-3
+  huber_delta: 2e-2
+
+  # DexPilot parameters
+  project_dist: 0.03   # 1.5cm - enter grasp mode very early
+  escape_dist: 0.05    # 8cm - stable grasp mode with more hysteresis
+  
+  # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
+  low_pass_alpha: 0.2 #0.1
