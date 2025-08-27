@@ -117,11 +117,11 @@ if __name__ == '__main__':
     # Configure VR display resolutions based on active camera selection
     if args.use_active_cam:
         # Use active camera for VR headset with full resolution
-        vr_img_shape = (img_config['active_camera_image_shape'][0], img_config['active_camera_image_shape'][1], 3)  # 720x2560 for VR
+        active_cam_img_shape = (img_config['active_camera_image_shape'][0], img_config['active_camera_image_shape'][1], 3)  # 720x2560 for VR
         logger_mp.info("Using active camera for VR headset with full resolution (720x2560)")
     else:
         # Use head camera
-        vr_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)  # Standard head camera resolution for VR
+        active_cam_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)  # Standard head camera resolution for VR
         logger_mp.info("Using head camera for VR headset")
 
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
@@ -145,6 +145,9 @@ if __name__ == '__main__':
     # Add shared memory for active camera recording if enabled
     if args.use_active_cam:
         active_cam_img_shape = (720, 2560, 3)  # Recording resolution for active cam
+        # Set up shared memory for VR display (full resolution or cropped)
+        if BINOCULAR and not (active_cam_img_shape[1] / active_cam_img_shape[0] > ASPECT_RATIO_THRESHOLD):
+            active_cam_img_shape = (active_cam_img_shape[0], active_cam_img_shape[1] * 2, 3)
         active_cam_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(active_cam_img_shape) * np.uint8().itemsize)
         active_cam_img_array = np.ndarray(active_cam_img_shape, dtype = np.uint8, buffer = active_cam_img_shm.buf)
 
