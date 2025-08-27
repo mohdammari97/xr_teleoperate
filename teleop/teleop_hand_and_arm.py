@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
     # Add shared memory for active camera recording if enabled
     if args.use_active_cam:
-        active_cam_img_shape = (480, 1280, 3)  # Recording resolution for active cam
+        active_cam_img_shape = (720, 2560, 3)  # Recording resolution for active cam
         active_cam_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(active_cam_img_shape) * np.uint8().itemsize)
         active_cam_img_array = np.ndarray(active_cam_img_shape, dtype = np.uint8, buffer = active_cam_img_shm.buf)
 
