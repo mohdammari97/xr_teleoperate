@@ -20,6 +20,7 @@ from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_Arm
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Dex1_1_Gripper_Controller
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.robot_control.robot_hand_brainco import Brainco_Controller
+from teleop.robot_control.active_head_cam import ActiveCameraController
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from sshkeyboard import listen_keyboard, stop_listening
@@ -66,6 +67,13 @@ if __name__ == '__main__':
     parser.add_argument('--motion', action = 'store_true', help = 'Enable motion control mode')
     parser.add_argument('--headless', action='store_true', help='Enable headless mode (no display)')
     parser.add_argument('--sim', action = 'store_true', help = 'Enable isaac simulation mode')
+    
+    # Active Camera options
+    parser.add_argument('--use-active-cam', action='store_true', default=False, help='Enable active camera head tracking')
+    parser.add_argument('--camera-port', type=str, default="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0", 
+                       help='Serial port for the active camera servo controller')
+    parser.add_argument('--camera-safe-mode', action='store_true', default=False, help='Enable safe mode with limited camera movement')
+    parser.add_argument('--camera-max-movement', type=float, default=60.0, help='Maximum camera movement in degrees from start position')
 
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
@@ -82,7 +90,7 @@ if __name__ == '__main__':
             #'wrist_camera_id_numbers': [2, 4],
         }
     else:
-       img_config = {
+        img_config = {
             'fps': 30,
             'head_camera_type': 'opencv',
             'head_camera_image_shape': [720, 1280],  # Head camera resolution
@@ -91,7 +99,24 @@ if __name__ == '__main__':
             #'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
             #'wrist_camera_id_numbers': [2, 4],
         }
+        # Add active camera config if enabled
+        if args.use_active_cam:
+            img_config.update({
+                'active_camera_type': 'opencv',
+                'active_camera_image_shape': [720, 2560],  # Resolution of active cam
+                'active_camera_id_numbers': [12],
+            })
 
+
+    # Configure VR display resolutions based on active camera selection
+    if args.use_active_cam:
+        # Use active camera for VR headset with full resolution
+        vr_img_shape = (img_config['active_camera_image_shape'][0], img_config['active_camera_image_shape'][1], 3)  # 720x2560 for VR
+        logger_mp.info("Using active camera for VR headset with full resolution (720x2560)")
+    else:
+        # Use head camera
+        vr_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)  # Standard head camera resolution for VR
+        logger_mp.info("Using head camera for VR headset")
 
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
     if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
@@ -111,6 +136,12 @@ if __name__ == '__main__':
     tv_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(tv_img_shape) * np.uint8().itemsize)
     tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = tv_img_shm.buf)
 
+    # Add shared memory for active camera recording if enabled
+    if args.use_active_cam:
+        active_cam_img_shape = (480, 1280, 3)  # Recording resolution for active cam
+        active_cam_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(active_cam_img_shape) * np.uint8().itemsize)
+        active_cam_img_array = np.ndarray(active_cam_img_shape, dtype = np.uint8, buffer = active_cam_img_shm.buf)
+
     if WRIST and args.sim:
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
@@ -121,10 +152,21 @@ if __name__ == '__main__':
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
         wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                 wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name)
+        if args.use_active_cam:
+            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
+                                     wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name,
+                                     active_cam_img_shape = active_cam_img_shape, active_cam_img_shm_name = active_cam_img_shm.name,
+                                     use_active_camera = True)
+        else:
+            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
+                                     wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name)
     else:
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
+        if args.use_active_cam:
+            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name,
+                                     active_cam_img_shape = active_cam_img_shape, active_cam_img_shm_name = active_cam_img_shm.name,
+                                     use_active_camera = True)
+        else:
+            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
 
     image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
     image_receive_thread.daemon = True
@@ -147,6 +189,27 @@ if __name__ == '__main__':
     elif args.arm == "H1":
         arm_ctrl = H1_ArmController(simulation_mode=args.sim)
         arm_ik = H1_ArmIK()
+
+    # active camera
+    camera_controller = None
+    if args.use_active_cam:
+        try:
+            logger_mp.info("Initializing active camera controller...")
+            camera_controller = ActiveCameraController(
+                port=args.camera_port,
+                safe_mode=args.camera_safe_mode,
+                max_movement_deg=args.camera_max_movement,
+                logger=logger_mp
+            )
+            
+            # Connect to servos
+            logger_mp.info("Connecting to camera servos...")
+            if not camera_controller.connect():
+                logger_mp.error("Failed to connect to servos")
+                camera_controller = None
+        except Exception as e:
+            logger_mp.error(f"Failed to initialize active camera: {e}")
+            camera_controller = None
 
     # end-effector
     if args.ee == "dex3":
@@ -205,6 +268,16 @@ if __name__ == '__main__':
         while not start_signal:
             time.sleep(0.01)
         arm_ctrl.speed_gradual_max()
+        
+        # Enable head tracking if active camera is available
+        if camera_controller:
+            logger_mp.info("Enabling head tracking...")
+            if not camera_controller.enable_head_tracking(tv_wrapper):
+                logger_mp.error("Failed to enable head tracking")
+                camera_controller = None
+            else:
+                logger_mp.info("Head tracking enabled! Camera will follow head movements automatically.")
+        
         while running:
             start_time = time.time()
 
@@ -415,8 +488,14 @@ if __name__ == '__main__':
         arm_ctrl.ctrl_dual_arm_go_home()
         if args.sim:
             sim_state_subscriber.stop_subscribe()
+        if camera_controller:
+            camera_controller.disconnect()
+            logger_mp.info("Active camera controller disconnected")
         tv_img_shm.close()
         tv_img_shm.unlink()
+        if args.use_active_cam:
+            active_cam_img_shm.close()
+            active_cam_img_shm.unlink()
         if WRIST:
             wrist_img_shm.close()
             wrist_img_shm.unlink()
