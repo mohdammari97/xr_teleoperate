@@ -1,0 +1,41 @@
+retargeting:
+  type: DexPilot
+  urdf_path: unitree_hand/unitree_dex3_left.urdf
+  
+  # Source refers to the retargeting input, which usually corresponds to the human hand
+  # The joint indices of human hand joint which corresponds to each link in the target_link_names
+  # Based on the Hand Joint index from https://support.unitree.com/home/en/G1_developer/dexterous_hand
+  target_joint_names: 
+    [
+      "left_hand_thumb_0_joint", # 0
+      "left_hand_thumb_1_joint", # 1
+      "left_hand_thumb_2_joint", # 2
+      "left_hand_middle_0_joint", # 3
+      "left_hand_middle_1_joint", # 4
+      "left_hand_index_0_joint", # 5
+      "left_hand_index_1_joint", # 6
+    ]
+  # The link on the robot hand which corresponding to the wrist of human hand
+  wrist_link_name: "base_link"
+  # DexPilot retargeting link names
+  finger_tip_link_names: ["thumb_tip", "index_tip", "middle_tip"] # thumb, middle, index
+  
+  #scaling_factor: 1.0 # Betha
+
+  # etha_1 closes the distance between a primary finger an the thumb, very relevant
+  #eta1: 1e-4 # Was passiert wenn vergrößert wird?
+  # etha_2 forces a minimum separation distance between two promary fingers when both primary fingers are being projected with the thumb. 
+  # Not relevant sice the primary finger have only two DOF
+  #eta2: 0 # Verkleinern
+  # Optimization parameters # Change??? 
+  normal_delta:  4e-3 # ?
+  huber_delta: 2e-2 # ?
+
+  #gamma : 2.5e-3 # 2.5e-3 # gamma is a weight to regulize the robot hand angles to zero /open Hand Position
+
+  # DexPilot parameters
+  project_dist: 0.03  
+  escape_dist: 0.05 
+  
+  # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
+  low_pass_alpha: 0.2 #0.1
