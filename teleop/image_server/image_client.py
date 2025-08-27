@@ -283,7 +283,7 @@ class ImageClient:
         if self.tv_enable_shm:
             tv_cam_width = self.tv_img_shape[1]
             tv_cam_region = current_image[:, :tv_cam_width]
-            np.copyto(self.active_cam_img_array, tv_cam_region)
+            np.copyto(self.tv_img_array, tv_cam_region)
         
         # Extract wrist cameras if present
         if self.wrist_enable_shm:
