@@ -229,7 +229,7 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, input_mode=args.xr_mode)
     elif args.ee == "dex1":
         left_gripper_value = Value('d', 0.0, lock=True)        # [input]
         right_gripper_value = Value('d', 0.0, lock=True)       # [input]
@@ -341,6 +341,30 @@ if __name__ == '__main__':
                     left_gripper_value.value = tele_data.left_pinch_value
                 with right_gripper_value.get_lock():
                     right_gripper_value.value = tele_data.right_pinch_value
+            elif args.ee == "dex3" and args.xr_mode == "controller":
+                # Map controller inputs to hand joint targets
+                left_thumb_index_close = tele_data.tele_state.left_thumbstick_state  # Press thumbstick = thumb+index
+                left_thumb_middle_close = tele_data.left_trigger_value  # Trigger value = thumb+middle
+                right_thumb_index_close = tele_data.tele_state.right_thumbstick_state
+                right_thumb_middle_close = tele_data.right_trigger_value
+                
+                with left_hand_pos_array.get_lock():
+                    # Left hand: [thumb_index_flag, thumb_middle_flag, trigger_value, reserved...]
+                    left_hand_pos_array[0] = 1.0 if left_thumb_index_close else 0.0
+                    left_hand_pos_array[1] = left_thumb_middle_close  # 0.0-1.0 from trigger
+                    left_hand_pos_array[2] = right_thumb_middle_close  # Cross-reference for symmetry
+                    # Fill rest with zeros for controller mode
+                    for i in range(3, 75):
+                        left_hand_pos_array[i] = 0.0
+                        
+                with right_hand_pos_array.get_lock():
+                    # Right hand: [thumb_index_flag, thumb_middle_flag, trigger_value, reserved...]
+                    right_hand_pos_array[0] = 1.0 if right_thumb_index_close else 0.0
+                    right_hand_pos_array[1] = right_thumb_middle_close  # 0.0-1.0 from trigger
+                    right_hand_pos_array[2] = left_thumb_middle_close   # Cross-reference for symmetry
+                    # Fill rest with zeros for controller mode
+                    for i in range(3, 75):
+                        right_hand_pos_array[i] = 0.0
             else:
                 pass        
             
@@ -404,6 +428,15 @@ if __name__ == '__main__':
                         right_ee_state = dual_hand_state_array[-6:]
                         left_hand_action = dual_hand_action_array[:6]
                         right_hand_action = dual_hand_action_array[-6:]
+                        current_body_state = []
+                        current_body_action = []
+
+                elif args.ee == "dex3" and args.xr_mode == "controller":
+                    with dual_hand_data_lock:
+                        left_ee_state = dual_hand_state_array[:7]
+                        right_ee_state = dual_hand_state_array[-7:]
+                        left_hand_action = dual_hand_action_array[:7]
+                        right_hand_action = dual_hand_action_array[-7:]
                         current_body_state = []
                         current_body_action = []
                 else:

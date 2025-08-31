@@ -47,7 +47,7 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 class Dex3_1_Controller:
     def __init__(self, left_hand_array_in, right_hand_array_in, dual_hand_data_lock = None, dual_hand_state_array_out = None,
-                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False, networkInterface='enxa0cec8616f27', force=False, retargeting_method='dexpilot', simulation_mode=False):
+                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False, networkInterface='enxa0cec8616f27', force=False, retargeting_method='dexpilot', simulation_mode=False, input_mode='hand'):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process.
         If force=True, shared array layout is [q0...q6, dq0...dq6, tau0...tau6, p0...p11] (33).
@@ -72,6 +72,13 @@ class Dex3_1_Controller:
         self.Unit_Test = Unit_Test
         self.force = force
         self.simulation_mode = simulation_mode #TODO Simulation mode mergen 
+        self.input_mode = input_mode 
+        self.THUMB_OPEN = 0.0
+        self.THUMB_CLOSED = 1.5
+        self.INDEX_OPEN = 0.0
+        self.INDEX_CLOSED = 1.7
+        self.MIDDLE_OPEN = 0.0
+        self.MIDDLE_CLOSED = 1.6
         if self.force:
             self.shared_array_size = 33  # [q0...q6, dq0...dq6, tau0...tau6, p0...p11]
         else:
@@ -187,6 +194,45 @@ class Dex3_1_Controller:
         self.RightHandCmb_publisher.Write(self.right_msg)
         # print("hand ctrl publish ok.")
     
+    def map_controller_to_joints(self, thumb_index_flag, thumb_middle_value, is_left_hand=True):
+        """
+        Map controller inputs to 7 joint positions for DEX3 hand.
+        
+        Args:
+            thumb_index_flag: Boolean flag for thumbstick press (thumb+index close)
+            thumb_middle_value: Float 0.0-1.0 from trigger (thumb+middle close)
+            is_left_hand: True for left hand, False for right hand
+            
+        Returns:
+            np.array: 7 joint positions [thumb0, thumb1, thumb2, middle0, middle1, index0, index1]
+        """
+        q_target = np.zeros(7)  # 7 joints per hand
+        
+        # Determine finger states based on controller inputs
+        thumb_active = thumb_index_flag or (thumb_middle_value > 0.1)
+        index_active = thumb_index_flag
+        middle_active = thumb_middle_value > 0.1
+        
+        # Calculate joint positions based on active fingers
+        if thumb_active:
+            # Thumb closure - use maximum value from either input
+            thumb_closure = max(1.0 if thumb_index_flag else 0.0, thumb_middle_value)
+            q_target[0] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb0
+            q_target[1] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb1
+            q_target[2] = 0.0  # thumb2 is typically fixed
+            
+        if index_active:
+            # Index finger closure from thumbstick press
+            q_target[5] = np.interp(1.0, [0.0, 1.0], [self.INDEX_OPEN, self.INDEX_CLOSED])  # index0
+            q_target[6] = 0.0  # index1 is typically fixed
+            
+        if middle_active:
+            # Middle finger closure from trigger value
+            q_target[3] = np.interp(thumb_middle_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle0
+            q_target[4] = np.interp(thumb_middle_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle1
+            
+        return q_target
+    
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
         self.running = True
@@ -227,161 +273,180 @@ class Dex3_1_Controller:
         try:
             while self.running:
                 start_time = time.time()
+                if self.input_mode == 'controller':
+                    # Controller mode: get controller inputs from shared arrays
+                    with left_hand_array.get_lock():
+                        left_thumb_index_flag = left_hand_array[0] > 0.5  # Thumbstick press
+                        left_thumb_middle_value = left_hand_array[1]      # Trigger value
+                        
+                    with right_hand_array.get_lock():
+                        right_thumb_index_flag = right_hand_array[0] > 0.5  # Thumbstick press
+                        right_thumb_middle_value = right_hand_array[1]      # Trigger value
+                    
+                    # Map controller inputs to joint positions
+                    left_q_target = self.map_controller_to_joints(
+                        left_thumb_index_flag, left_thumb_middle_value, is_left_hand=True
+                    )
+                    right_q_target = self.map_controller_to_joints(
+                        right_thumb_index_flag, right_thumb_middle_value, is_left_hand=False
+                    )
+                    state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
                 # get dual hand state form OpenXR device
-                left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy() # 25 joints, each with 3D position
-                right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy() # 25 joints, each with 3D position
+                if self.input_mode == 'hand':
+                    left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy() # 25 joints, each with 3D position
+                    right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy() # 25 joints, each with 3D position
 
-                # Read left and right q_state from shared arrays
-                state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
+                    # Read left and right q_state from shared arrays
+                    state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
 
-                if not np.all(right_hand_mat == 0.0) and not np.all(left_hand_mat[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    # Get retargeting types
-                    left_retargeting_type = self.hand_retargeting.left_retargeting.optimizer.retargeting_type
-                    right_retargeting_type = self.hand_retargeting.right_retargeting.optimizer.retargeting_type
-                    
-                    # Process left hand
-                    left_indices = self.hand_retargeting.left_retargeting.optimizer.target_link_human_indices
+                    if not np.all(right_hand_mat == 0.0) and not np.all(left_hand_mat[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
+                        # Get retargeting types
+                        left_retargeting_type = self.hand_retargeting.left_retargeting.optimizer.retargeting_type
+                        right_retargeting_type = self.hand_retargeting.right_retargeting.optimizer.retargeting_type
+                        
+                        # Process left hand
+                        left_indices = self.hand_retargeting.left_retargeting.optimizer.target_link_human_indices
 
-                    if left_retargeting_type ==  "VECTOR": # Ist das Ein bug? Ist das Absicht mit Position?? 
-                        # Vector method: use absolute fingertip positions
-                        ref_left_value = left_hand_mat[unitree_tip_indices]
-                        # -------- Tune for Vector Retargeting Method --------
-                        ref_left_value[0] = ref_left_value[0] * 1.15 # Scale thumb position
-                        ref_left_value[1] = ref_left_value[1] * 1.05 # Scale index position
-                        ref_left_value[2] = ref_left_value[2] * 0.95 # Scale middle position
-                        left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
+                        if left_retargeting_type ==  "VECTOR": # Ist das Ein bug? Ist das Absicht mit Position?? 
+                            # Vector method: use absolute fingertip positions
+                            ref_left_value = left_hand_mat[unitree_tip_indices]
+                            # -------- Tune for Vector Retargeting Method --------
+                            ref_left_value[0] = ref_left_value[0] * 1.15 # Scale thumb position
+                            ref_left_value[1] = ref_left_value[1] * 1.05 # Scale index position
+                            ref_left_value[2] = ref_left_value[2] * 0.95 # Scale middle position
+                            left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
 
-                    elif left_retargeting_type == "DEXPILOT":
-                        # DexPilot method: use relative positions (vectors between joints)
-                        # DexPilot expects 6 vectors for a 3-finger hand:
-                        # Vector 0: index_tip -> thumb_tip
-                        # Vector 1: middle_tip -> thumb_tip  
-                        # Vector 2: middle_tip -> index_tip
-                        # Vector 3: base_link -> thumb_tip
-                        # Vector 4: base_link -> index_tip
-                        # Vector 5: base_link -> middle_tip
-                        
-                        origin_indices = left_indices[0, :]  # All origin indices
-                        task_indices = left_indices[1, :]    # All task indices
-                        
-                        # Create a sparse joint position array with OpenXR data at the correct indices
-                        # DexPilot's human indices tell us where to place the OpenXR joint data
+                        elif left_retargeting_type == "DEXPILOT":
+                            # DexPilot method: use relative positions (vectors between joints)
+                            # DexPilot expects 6 vectors for a 3-finger hand:
+                            # Vector 0: index_tip -> thumb_tip
+                            # Vector 1: middle_tip -> thumb_tip  
+                            # Vector 2: middle_tip -> index_tip
+                            # Vector 3: base_link -> thumb_tip
+                            # Vector 4: base_link -> index_tip
+                            # Vector 5: base_link -> middle_tip
+                            
+                            origin_indices = left_indices[0, :]  # All origin indices
+                            task_indices = left_indices[1, :]    # All task indices
+                            
+                            # Create a sparse joint position array with OpenXR data at the correct indices
+                            # DexPilot's human indices tell us where to place the OpenXR joint data
 
-                        # Place OpenXR joint data at the indices expected by DexPilot
-                        # From debug: origin_indices = [8, 12, 12, 0, 0, 0], task_indices = [4, 4, 8, 4, 8, 12]
-                        # This means DexPilot expects data at indices: 0, 4, 8, 12
-                        # Potential Issue area -------------------
-                        # Archive
-                        joint_pos = np.zeros((25, 3))
-                        joint_pos[0] = left_hand_mat[0]   # wrist -> index 0
-                        joint_pos[4] = left_hand_mat[4]   # thumb_tip -> index 4
-                        joint_pos[8] = left_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
-                        joint_pos[12] = left_hand_mat[24] # middle_tip -> index 12 (OpenXR index 14 for middle finger) 24 for pinky finger 
-                        #joint_pos = left_hand_mat.copy()  # Use the full OpenXR data directly
-                        # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
-                        ref_left_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
-                        # ------------------------------------
-                        # From debug: URDF fixed joint indices are [1, 6] which correspond to:
-                        # URDF Joint 1: left_hand_index_1_joint (Hardware Index 6)  
-                        # URDF Joint 6: left_hand_thumb_2_joint (Hardware Index 2)
-                        # DexPilot optimizes all 7 joints - no fixed_qpos needed
+                            # Place OpenXR joint data at the indices expected by DexPilot
+                            # From debug: origin_indices = [8, 12, 12, 0, 0, 0], task_indices = [4, 4, 8, 4, 8, 12]
+                            # This means DexPilot expects data at indices: 0, 4, 8, 12
+                            # Potential Issue area -------------------
+                            # Archive
+                            joint_pos = np.zeros((25, 3))
+                            joint_pos[0] = left_hand_mat[0]   # wrist -> index 0
+                            joint_pos[4] = left_hand_mat[4]   # thumb_tip -> index 4
+                            joint_pos[8] = left_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
+                            joint_pos[12] = left_hand_mat[24] # middle_tip -> index 12 (OpenXR index 14 for middle finger) 24 for pinky finger 
+                            #joint_pos = left_hand_mat.copy()  # Use the full OpenXR data directly
+                            # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
+                            ref_left_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+                            # ------------------------------------
+                            # From debug: URDF fixed joint indices are [1, 6] which correspond to:
+                            # URDF Joint 1: left_hand_index_1_joint (Hardware Index 6)  
+                            # URDF Joint 6: left_hand_thumb_2_joint (Hardware Index 2)
+                            # DexPilot optimizes all 7 joints - no fixed_qpos needed
+                            
+                            dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
+                            # Map from URDF order to Hardware API order
+                            # DexPilot returns the full 7-joint array with fixed joints already set
+                            # We just need to map from URDF order to Hardware API order
+                            left_q_target = np.zeros(Dex3_Num_Motors)
+                            # URDF to Hardware mapping:
+                            # URDF[0] left_hand_index_0_joint -> Hardware[5]
+                            # URDF[1] left_hand_index_1_joint -> Hardware[6] (fixed)
+                            # URDF[2] left_hand_middle_0_joint -> Hardware[3]  
+                            # URDF[3] left_hand_middle_1_joint -> Hardware[4]
+                            # URDF[4] left_hand_thumb_0_joint -> Hardware[0]
+                            # URDF[5] left_hand_thumb_1_joint -> Hardware[1]
+                            # URDF[6] left_hand_thumb_2_joint -> Hardware[2] (fixed)
+                            urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
+                            for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
+                                left_q_target[hw_idx] = dexpilot_output[urdf_idx]
+                        else:
+                            # Fallback for unknown retargeting types
+                            print(f"Warning: Unknown left retargeting type {left_retargeting_type}, using zero positions")
+                            left_q_target = np.zeros(Dex3_Num_Motors)
                         
-                        dexpilot_output = self.hand_retargeting.left_retargeting.retarget(ref_left_value)
-                        # Map from URDF order to Hardware API order
-                        # DexPilot returns the full 7-joint array with fixed joints already set
-                        # We just need to map from URDF order to Hardware API order
-                        left_q_target = np.zeros(Dex3_Num_Motors)
-                        # URDF to Hardware mapping:
-                        # URDF[0] left_hand_index_0_joint -> Hardware[5]
-                        # URDF[1] left_hand_index_1_joint -> Hardware[6] (fixed)
-                        # URDF[2] left_hand_middle_0_joint -> Hardware[3]  
-                        # URDF[3] left_hand_middle_1_joint -> Hardware[4]
-                        # URDF[4] left_hand_thumb_0_joint -> Hardware[0]
-                        # URDF[5] left_hand_thumb_1_joint -> Hardware[1]
-                        # URDF[6] left_hand_thumb_2_joint -> Hardware[2] (fixed)
-                        urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
-                        for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
-                            left_q_target[hw_idx] = dexpilot_output[urdf_idx]
-                    else:
-                        # Fallback for unknown retargeting types
-                        print(f"Warning: Unknown left retargeting type {left_retargeting_type}, using zero positions")
-                        left_q_target = np.zeros(Dex3_Num_Motors)
-                    
-                    # Process right hand
-                    right_indices = self.hand_retargeting.right_retargeting.optimizer.target_link_human_indices
-                    if right_retargeting_type == "VECTOR":
-                        # Vector method: use absolute fingertip positions (original simple method)
-                        ref_right_value = right_hand_mat[unitree_tip_indices]
-                        ref_right_value[0] = ref_right_value[0] * 1.15
-                        ref_right_value[1] = ref_right_value[1] * 1.05
-                        ref_right_value[2] = ref_right_value[2] * 0.95
-                        right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
-                    elif right_retargeting_type == "DEXPILOT":
-                        # DexPilot method: use relative positions (vectors between joints)
-                        # DexPilot expects 6 vectors for a 3-finger hand:
-                        # Vector 0: index_tip -> thumb_tip
-                        # Vector 1: middle_tip -> thumb_tip  
-                        # Vector 2: middle_tip -> index_tip
-                        # Vector 3: base_link -> thumb_tip
-                        # Vector 4: base_link -> index_tip
-                        # Vector 5: base_link -> middle_tip
+                        # Process right hand
+                        right_indices = self.hand_retargeting.right_retargeting.optimizer.target_link_human_indices
+                        if right_retargeting_type == "VECTOR":
+                            # Vector method: use absolute fingertip positions (original simple method)
+                            ref_right_value = right_hand_mat[unitree_tip_indices]
+                            ref_right_value[0] = ref_right_value[0] * 1.15
+                            ref_right_value[1] = ref_right_value[1] * 1.05
+                            ref_right_value[2] = ref_right_value[2] * 0.95
+                            right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
+                        elif right_retargeting_type == "DEXPILOT":
+                            # DexPilot method: use relative positions (vectors between joints)
+                            # DexPilot expects 6 vectors for a 3-finger hand:
+                            # Vector 0: index_tip -> thumb_tip
+                            # Vector 1: middle_tip -> thumb_tip  
+                            # Vector 2: middle_tip -> index_tip
+                            # Vector 3: base_link -> thumb_tip
+                            # Vector 4: base_link -> index_tip
+                            # Vector 5: base_link -> middle_tip
 
-                        origin_indices = right_indices[0, :]  # All origin indices
-                        task_indices = right_indices[1, :]    # All task indices
-                        
-                        # Create a sparse joint position array with OpenXR data at the correct indices
-                        # DexPilot's human indices tell us where to place the OpenXR joint data
-                        joint_pos = np.zeros((25, 3))
-                        
-                        # Place OpenXR joint data at the indices expected by DexPilot
-                        # From debug: origin_indices = [8, 12, 12, 0, 0, 0], task_indices = [4, 4, 8, 4, 8, 12]
-                        # This means DexPilot expects data at indices: 0, 4, 8, 12
-                        joint_pos[0] = right_hand_mat[0]   # wrist -> index 0
-                        joint_pos[4] = right_hand_mat[4]   # thumb_tip -> index 4
-                        joint_pos[8] = right_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
-                        joint_pos[12] = right_hand_mat[24] # middle_tip -> index 12 (OpenXR index 14)
-                        
-                        # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
-                        ref_right_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
-                        
-                        # For target_joint_names config, we need to provide fixed_qpos for the non-optimized joints
-                        # From debug: URDF fixed joint indices are [1, 6] which correspond to:
-                        # URDF Joint 1: right_hand_index_1_joint (Hardware Index 6)  
-                        # URDF Joint 6: right_hand_thumb_2_joint (Hardware Index 2)
-                        # DexPilot retargeting - same as reference implementation
-                        dexpilot_output = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
-                        
-                        # Apply thumb pinch correction to DexPilot output (optional - can be disabled)
-                        # ----------------------
-                        # Extract fingertip positions for pinch detection
-                        # thumb_tip_pos = right_hand_mat[4]   # OpenXR index 4
-                        # index_tip_pos = right_hand_mat[9]   # OpenXR index 9  
-                        # middle_tip_pos = right_hand_mat[14] # OpenXR index 14
-                        
-                        # # Apply correction to the DexPilot output
-                        # dexpilot_output = self.right_thumb_corrector.apply_correction(
-                        #     dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
-                        # )
-                        # ------------------------------------------------
-                        # Map from URDF order to Hardware API order
-                        # DexPilot returns the full 7-joint array with fixed joints already set
-                        right_q_target = np.zeros(Dex3_Num_Motors)
+                            origin_indices = right_indices[0, :]  # All origin indices
+                            task_indices = right_indices[1, :]    # All task indices
+                            
+                            # Create a sparse joint position array with OpenXR data at the correct indices
+                            # DexPilot's human indices tell us where to place the OpenXR joint data
+                            joint_pos = np.zeros((25, 3))
+                            
+                            # Place OpenXR joint data at the indices expected by DexPilot
+                            # From debug: origin_indices = [8, 12, 12, 0, 0, 0], task_indices = [4, 4, 8, 4, 8, 12]
+                            # This means DexPilot expects data at indices: 0, 4, 8, 12
+                            joint_pos[0] = right_hand_mat[0]   # wrist -> index 0
+                            joint_pos[4] = right_hand_mat[4]   # thumb_tip -> index 4
+                            joint_pos[8] = right_hand_mat[9]   # index_tip -> index 8 (OpenXR index 9)
+                            joint_pos[12] = right_hand_mat[24] # middle_tip -> index 12 (OpenXR index 14)
+                            
+                            # Calculate vectors using the indices DexPilot specifies (same as show_realtime_retargeting.py)
+                            ref_right_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+                            
+                            # For target_joint_names config, we need to provide fixed_qpos for the non-optimized joints
+                            # From debug: URDF fixed joint indices are [1, 6] which correspond to:
+                            # URDF Joint 1: right_hand_index_1_joint (Hardware Index 6)  
+                            # URDF Joint 6: right_hand_thumb_2_joint (Hardware Index 2)
+                            # DexPilot retargeting - same as reference implementation
+                            dexpilot_output = self.hand_retargeting.right_retargeting.retarget(ref_right_value)
+                            
+                            # Apply thumb pinch correction to DexPilot output (optional - can be disabled)
+                            # ----------------------
+                            # Extract fingertip positions for pinch detection
+                            # thumb_tip_pos = right_hand_mat[4]   # OpenXR index 4
+                            # index_tip_pos = right_hand_mat[9]   # OpenXR index 9  
+                            # middle_tip_pos = right_hand_mat[14] # OpenXR index 14
+                            
+                            # # Apply correction to the DexPilot output
+                            # dexpilot_output = self.right_thumb_corrector.apply_correction(
+                            #     dexpilot_output, thumb_tip_pos, index_tip_pos, middle_tip_pos
+                            # )
+                            # ------------------------------------------------
+                            # Map from URDF order to Hardware API order
+                            # DexPilot returns the full 7-joint array with fixed joints already set
+                            right_q_target = np.zeros(Dex3_Num_Motors)
 
-                        # URDF to Hardware mapping:
-                        # URDF[0] right_hand_index_0_joint -> Hardware[5]
-                        # URDF[1] right_hand_index_1_joint -> Hardware[6] (fixed)
-                        # URDF[2] right_hand_middle_0_joint -> Hardware[3]  
-                        # URDF[3] right_hand_middle_1_joint -> Hardware[4]
-                        # URDF[4] right_hand_thumb_0_joint -> Hardware[0]
-                        # URDF[5] right_hand_thumb_1_joint -> Hardware[1]
-                        # URDF[6] right_hand_thumb_2_joint -> Hardware[2] (fixed)
-                        urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
-                        for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
-                            right_q_target[hw_idx] = dexpilot_output[urdf_idx]
-                    else:
-                        # Fallback for unknown retargeting types
-                        print(f"Warning: Unknown right retargeting type {right_retargeting_type}, using zero positions")
-                        right_q_target = np.zeros(Dex3_Num_Motors)
+                            # URDF to Hardware mapping:
+                            # URDF[0] right_hand_index_0_joint -> Hardware[5]
+                            # URDF[1] right_hand_index_1_joint -> Hardware[6] (fixed)
+                            # URDF[2] right_hand_middle_0_joint -> Hardware[3]  
+                            # URDF[3] right_hand_middle_1_joint -> Hardware[4]
+                            # URDF[4] right_hand_thumb_0_joint -> Hardware[0]
+                            # URDF[5] right_hand_thumb_1_joint -> Hardware[1]
+                            # URDF[6] right_hand_thumb_2_joint -> Hardware[2] (fixed)
+                            urdf_to_hardware = [5, 6, 3, 4, 0, 1, 2]
+                            for urdf_idx, hw_idx in enumerate(urdf_to_hardware):
+                                right_q_target[hw_idx] = dexpilot_output[urdf_idx]
+                        else:
+                            # Fallback for unknown retargeting types
+                            print(f"Warning: Unknown right retargeting type {right_retargeting_type}, using zero positions")
+                            right_q_target = np.zeros(Dex3_Num_Motors)
 
                 # get dual hand action
                 action_data = np.concatenate((left_q_target, right_q_target))    
@@ -668,6 +733,30 @@ if __name__ == "__main__":
                     left_gripper_value.value = tele_data.left_pinch_value
                 with right_gripper_value.get_lock():
                     right_gripper_value.value = tele_data.right_pinch_value
+            elif args.ee == "dex3" and args.xr_mode == "controller":
+                # Map controller inputs to hand joint targets
+                left_thumb_index_close = tele_data.tele_state.left_thumbstick_state  # Press thumbstick = thumb+index
+                left_thumb_middle_close = tele_data.left_trigger_value  # Trigger value = thumb+middle
+                right_thumb_index_close = tele_data.tele_state.right_thumbstick_state
+                right_thumb_middle_close = tele_data.right_trigger_value
+                
+                with left_hand_pos_array.get_lock():
+                    # Left hand: [thumb_index_flag, thumb_middle_flag, trigger_value, reserved...]
+                    left_hand_pos_array[0] = 1.0 if left_thumb_index_close else 0.0
+                    left_hand_pos_array[1] = left_thumb_middle_close  # 0.0-1.0 from trigger
+                    left_hand_pos_array[2] = right_thumb_middle_close  # Cross-reference for symmetry
+                    # Fill rest with zeros for controller mode
+                    for i in range(3, 75):
+                        left_hand_pos_array[i] = 0.0
+                        
+                with right_hand_pos_array.get_lock():
+                    # Right hand: [thumb_index_flag, thumb_middle_flag, trigger_value, reserved...]
+                    right_hand_pos_array[0] = 1.0 if right_thumb_index_close else 0.0
+                    right_hand_pos_array[1] = right_thumb_middle_close  # 0.0-1.0 from trigger
+                    right_hand_pos_array[2] = left_thumb_middle_close   # Cross-reference for symmetry
+                    # Fill rest with zeros for controller mode
+                    for i in range(3, 75):
+                        right_hand_pos_array[i] = 0.0
             else:
                 pass
 
