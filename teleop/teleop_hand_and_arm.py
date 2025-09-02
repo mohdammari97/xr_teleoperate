@@ -437,8 +437,10 @@ if __name__ == '__main__':
                         right_ee_state = dual_hand_state_array[-7:]
                         left_hand_action = dual_hand_action_array[:7]
                         right_hand_action = dual_hand_action_array[-7:]
-                        current_body_state = []
-                        current_body_action = []
+                        current_body_state = arm_ctrl.get_current_motor_q().tolist()
+                        current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
+                                               -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                               -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
                 else:
                     left_ee_state = []
                     right_ee_state = []
