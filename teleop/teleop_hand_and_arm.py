@@ -362,6 +362,9 @@ if __name__ == '__main__':
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
+            # get current robot velocity data from odometry subscriber
+            robot_vel = arm_ctrl.get_current_robot_velocity()
+
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
             sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
@@ -423,6 +426,8 @@ if __name__ == '__main__':
                 right_arm_state = current_lr_arm_q[-7:]
                 left_arm_action = sol_q[:7]
                 right_arm_action = sol_q[-7:]
+                robot_vel_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.6, -tele_data.tele_state.left_thumbstick_value[0]  * 0.6, -tele_data.tele_state.right_thumbstick_value[0]  * 0.6]
+
                 if is_recording:
                     colors = {}
                     depths = {}
@@ -461,7 +466,10 @@ if __name__ == '__main__':
                         "body": {
                             "qpos": current_body_state,
                         }, 
-                    }
+                        "body_vel": {
+                            "qvel": robot_vel.tolist(), 
+                        }
+                        }
                     actions = {
                         "left_arm": {                                   
                             "qpos":   left_arm_action.tolist(),       
@@ -485,7 +493,11 @@ if __name__ == '__main__':
                         }, 
                         "body": {
                             "qpos": current_body_action,
-                        }, 
+                        },
+                        "body_vel": {
+                            "qvel": robot_vel_action, 
+                        
+                        } 
                     }
                     if args.sim:
                         sim_state = sim_state_subscriber.read_data()            

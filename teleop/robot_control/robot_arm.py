@@ -80,6 +80,8 @@ class G1_29_ArmController:
         self._gradual_start_time = None
         self._gradual_time = None
 
+        self.robot_vel = [0.0, 0.0, 0.0]
+
         # initialize lowcmd publisher and lowstate subscriber
         if self.simulation_mode:
             ChannelFactoryInitialize(1)
@@ -93,6 +95,11 @@ class G1_29_ArmController:
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
+
+        self.odometry_subscriber = ChannelSubscriber("rt/odommodestate",hg_SportModeState)
+
+        self.odometry_subscriber.Init()
+
         self.lowstate_buffer = DataBuffer()
 
         # initialize subscribe thread
@@ -147,12 +154,15 @@ class G1_29_ArmController:
     def _subscribe_motor_state(self):
         while True:
             msg = self.lowstate_subscriber.Read()
+            msg_high = self.odometry_subscriber.Read()
             if msg is not None:
                 lowstate = G1_29_LowState()
                 for id in range(G1_29_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
                 self.lowstate_buffer.SetData(lowstate)
+            if msg_high is not None:
+                self.robot_vel = list(msg_high.velocity)
             time.sleep(0.002)
 
     def clip_arm_q_target(self, target_q, velocity_limit):
@@ -218,6 +228,9 @@ class G1_29_ArmController:
     def get_current_dual_arm_dq(self):
         '''Return current state dq of the left and right arm motors.'''
         return np.array([self.lowstate_buffer.GetData().motor_state[id].dq for id in G1_29_JointArmIndex])
+    
+    def get_current_robot_velocity(self):
+        return np.array(self.robot_vel)
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
