@@ -331,6 +331,28 @@ if __name__ == '__main__':
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
                 with right_hand_pos_array.get_lock():
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
+            
+            elif args.ee == "dex3" and args.xr_mode == "controller": #NEEDS ADJUSTMENT
+                dex3_action = [0.0] * 7
+
+                # Get states
+                a_pressed = tele_data.tele_state.right_aButton
+                trigger_pressed = tele_data.tele_state.right_trigger_state
+
+                # Thumb always participates
+                if a_pressed or trigger_pressed:
+                    dex3_action[0] = 1.0  # thumb close
+
+                if a_pressed:
+                    dex3_action[1] = 1.0  # index close
+                if trigger_pressed:
+                    dex3_action[2] = 1.0  # middle close
+
+                # Send to Dex3 controller (right hand only)
+                if right_hand_action_array is not None:
+                    with right_hand_action_array.get_lock():
+                        right_hand_action_array[:7] = dex3_action
+            
             elif args.ee == "dex1" and args.xr_mode == "controller":
                 with left_gripper_value.get_lock():
                     left_gripper_value.value = tele_data.left_trigger_value
