@@ -229,7 +229,7 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, input_mode=args.xr_mode)
     elif args.ee == "dex1":
         left_gripper_value = Value('d', 0.0, lock=True)        # [input]
         right_gripper_value = Value('d', 0.0, lock=True)       # [input]
@@ -331,6 +331,27 @@ if __name__ == '__main__':
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
                 with right_hand_pos_array.get_lock():
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
+            elif args.ee == "dex3" and args.xr_mode == "controller":
+                # Map controller inputs to hand control signals
+                # Format: [left_a_button, left_trigger, left_b_button, right_a_button, right_trigger, right_b_button]
+                
+                with left_hand_pos_array.get_lock():
+                    # Clear the array first
+                    for i in range(75):
+                        left_hand_pos_array[i] = 0.0
+                    # Set controller signals for left hand
+                    left_hand_pos_array[0] = 1.0 if tele_data.tele_state.left_aButton else 0.0    # A button
+                    left_hand_pos_array[1] = tele_data.left_trigger_value                          # Trigger (0.0-1.0)
+                    left_hand_pos_array[2] = 1.0 if tele_data.tele_state.left_bButton else 0.0    # B button (reserved)
+                    
+                with right_hand_pos_array.get_lock():
+                    # Clear the array first  
+                    for i in range(75):
+                        right_hand_pos_array[i] = 0.0
+                    # Set controller signals for right hand
+                    right_hand_pos_array[0] = 1.0 if tele_data.tele_state.right_aButton else 0.0  # A button
+                    right_hand_pos_array[1] = tele_data.right_trigger_value                        # Trigger (0.0-1.0)
+                    right_hand_pos_array[2] = 1.0 if tele_data.tele_state.right_bButton else 0.0  # B button (reserved)
             elif args.ee == "dex1" and args.xr_mode == "controller":
                 with left_gripper_value.get_lock():
                     left_gripper_value.value = tele_data.left_trigger_value
@@ -383,6 +404,16 @@ if __name__ == '__main__':
                         right_hand_action = dual_hand_action_array[-7:]
                         current_body_state = []
                         current_body_action = []
+                elif args.ee == "dex3" and args.xr_mode == "controller": #recording support for controller
+                    with dual_hand_data_lock:
+                        left_ee_state = dual_hand_state_array[:7]
+                        right_ee_state = dual_hand_state_array[-7:]
+                        left_hand_action = dual_hand_action_array[:7]
+                        right_hand_action = dual_hand_action_array[-7:]
+                        current_body_state = arm_ctrl.get_current_motor_q().tolist()
+                        current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
+                                            -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                            -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
                 elif args.ee == "dex1" and args.xr_mode == "hand":
                     with dual_gripper_data_lock:
                         left_ee_state = [dual_gripper_state_array[0]]
