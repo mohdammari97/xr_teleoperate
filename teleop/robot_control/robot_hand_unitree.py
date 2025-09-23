@@ -74,7 +74,7 @@ class Dex3_1_Controller:
         self.input_mode = input_mode
         self.simulation_mode = simulation_mode #TODO Simulation mode mergen
         self.THUMB_OPEN = 0.0
-        self.THUMB_CLOSED = 1.5
+        self.THUMB_CLOSED = 0.8 #instead of 1.5
         self.INDEX_OPEN = 0.0
         self.INDEX_CLOSED = 1.7
         self.MIDDLE_OPEN = 0.0
@@ -211,16 +211,17 @@ class Dex3_1_Controller:
         
         # Determine finger activation
         thumb_from_a = a_button_pressed
-        thumb_from_trigger = trigger_value > 0.1
+        thumb_from_trigger = trigger_value > 0.3
         index_active = a_button_pressed
-        middle_active = trigger_value > 0.1
+        middle_active = trigger_value > 0.3
+        trigger_value = np.clip(trigger_value, 0.0, 1.0) #added threshold values for the triggers
         
         # Calculate thumb closure (take maximum activation from either input)
         if thumb_from_a or thumb_from_trigger:
             thumb_closure = max(1.0 if thumb_from_a else 0.0, trigger_value)
-            q_target[0] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb0
+            q_target[0] = 0.0  # thumb0, np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])
             q_target[1] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb1
-            q_target[2] = 0.0  # thumb2 typically fixed
+            q_target[2] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb2, it was '0.0' typically fixed
             
         # Calculate index closure from A button
         if index_active:
