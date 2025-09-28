@@ -194,7 +194,7 @@ class Dex3_1_Controller:
         self.RightHandCmb_publisher.Write(self.right_msg)
         # print("hand ctrl publish ok.")
     
-    def map_controller_to_joints(self, a_button_pressed, trigger_value, b_button_pressed=False, is_left_hand=True):
+    def map_controller_to_joints_right(self, a_button_pressed, trigger_value):
         """
         Map controller inputs to 7 joint positions for DEX3 hand.
         
@@ -215,7 +215,50 @@ class Dex3_1_Controller:
         index_active = a_button_pressed
         middle_active = trigger_value > 0.3
         trigger_value = np.clip(trigger_value, 0.0, 1.0) #added threshold values for the triggers
+        # Calculate thumb closure (take maximum activation from either input)
+        if trigger_value > 0.3:
+            thumb_closure = trigger_value
+            q_target[0] = 0.0  # thumb0, np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])
+            q_target[1] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb1
+            q_target[2] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb2, it was '0.0' typically fixed
+            q_target[3] = 0.0
+            q_target[4] = 0.0
+            q_target[5] = 0.0 # index0
+            q_target[6] = 0.0  # index1 typically fixed
+            
+        # Calculate index closure from A button
+        if index_active:
+            q_target[5] = np.interp(1.0, [0.0, 1.0], [self.INDEX_OPEN, self.INDEX_CLOSED])  # index0
+            q_target[6] = 0.0  # index1 typically fixed
+            
+        # Calculate middle closure from trigger value (proportional)
+        #if middle_active:
+            #q_target[3] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle0
+            #q_target[4] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle1
+            
+        return q_target
+    
+    def map_controller_to_joints_left(self, a_button_pressed, trigger_value):
+        """
+        Map controller inputs to 7 joint positions for DEX3 hand.
         
+        Args:
+            a_button_pressed: Boolean flag for A button (thumb+index close)
+            trigger_value: Float 0.0-1.0 from trigger (thumb+middle close)
+            b_button_pressed: Boolean flag for B button (reserved for future use)
+            is_left_hand: True for left hand, False for right hand
+            
+        Returns:
+            np.array: 7 joint positions mapped to hardware order [thumb0, thumb1, thumb2, middle0, middle1, index0, index1]
+        """
+        q_target = np.zeros(7)  # Hardware order
+        
+        # Determine finger activation
+        thumb_from_a = a_button_pressed
+        thumb_from_trigger = trigger_value > 0.3
+        index_active = a_button_pressed
+        middle_active = trigger_value > 0.3
+        trigger_value = np.clip(trigger_value, 0.0, 1.0) #added threshold values for the triggers
         # Calculate thumb closure (take maximum activation from either input)
         if trigger_value > 0.3:
             thumb_closure = trigger_value
@@ -293,12 +336,10 @@ class Dex3_1_Controller:
                         right_b_button = right_hand_array[2] > 0.5      # B button press (reserved)
                     
                     # Map controller inputs to joint positions
-                    left_q_target = self.map_controller_to_joints(
-                        left_a_button, left_trigger_value, left_b_button, is_left_hand=True
-                    )
-                    right_q_target = self.map_controller_to_joints(
-                        right_a_button, right_trigger_value, right_b_button, is_left_hand=False
-                    )
+                    left_q_target = self.map_controller_to_joints_left(
+                        left_a_button, left_trigger_value)
+                    right_q_target = self.map_controller_to_joints_right(
+                        right_a_button, right_trigger_value)
                     
                     # Get current state for recording
                     state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
