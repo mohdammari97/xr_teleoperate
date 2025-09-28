@@ -217,11 +217,15 @@ class Dex3_1_Controller:
         trigger_value = np.clip(trigger_value, 0.0, 1.0) #added threshold values for the triggers
         
         # Calculate thumb closure (take maximum activation from either input)
-        if thumb_from_a or thumb_from_trigger:
-            thumb_closure = max(1.0 if thumb_from_a else 0.0, trigger_value)
+        if trigger_value > 0.3:
+            thumb_closure = trigger_value
             q_target[0] = 0.0  # thumb0, np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])
             q_target[1] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb1
             q_target[2] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb2, it was '0.0' typically fixed
+            q_target[3] = 0.0
+            q_target[4] = 0.0
+            q_target[5] = 0.0 # index0
+            q_target[6] = 0.0  # index1 typically fixed
             
         # Calculate index closure from A button
         if index_active:
@@ -229,9 +233,9 @@ class Dex3_1_Controller:
             q_target[6] = 0.0  # index1 typically fixed
             
         # Calculate middle closure from trigger value (proportional)
-        if middle_active:
-            q_target[3] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle0
-            q_target[4] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle1
+        #if middle_active:
+            #q_target[3] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle0
+            #q_target[4] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle1
             
         return q_target
     
