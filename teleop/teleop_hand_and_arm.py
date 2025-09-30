@@ -332,26 +332,32 @@ if __name__ == '__main__':
                 with right_hand_pos_array.get_lock():
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
             elif args.ee == "dex3" and args.xr_mode == "controller":
-                # Map controller inputs to hand control signals
-                # Format: [left_a_button, left_trigger, left_b_button, right_a_button, right_trigger, right_b_button]
-                
+                # LEFT HAND
                 with left_hand_pos_array.get_lock():
-                    # Clear the array first
-                    for i in range(75):
+                    for i in range(75):  # clear
                         left_hand_pos_array[i] = 0.0
-                    # Set controller signals for left hand
-                    left_hand_pos_array[0] = 1.0 if tele_data.tele_state.left_aButton else 0.0    # A button
-                    left_hand_pos_array[1] = tele_data.left_trigger_value                          # Trigger (0.0-1.0)
-                    left_hand_pos_array[2] = 1.0 if tele_data.tele_state.left_bButton else 0.0    # B button (reserved)
-                    
+
+                    # Quest LEFT controller doesn't have A/B; map X→A-like and Y→B-like
+                    left_a_like = bool(getattr(tele_data.tele_state, "left_xButton", False)) \
+                                or bool(getattr(tele_data.tele_state, "left_aButton", False))  # fallback if present
+                    left_b_like = bool(getattr(tele_data.tele_state, "left_yButton", False)) \
+                                or bool(getattr(tele_data.tele_state, "left_bButton", False))  # fallback if present
+
+                    left_hand_pos_array[0] = 1.0 if left_a_like else 0.0                 # A-like: closes thumb
+                    left_hand_pos_array[1] = float(tele_data.left_trigger_value or 0.0)  # Trigger: closes index
+                    left_hand_pos_array[2] = 1.0 if left_b_like else 0.0                 # B-like: closes both
+
+                # RIGHT HAND
                 with right_hand_pos_array.get_lock():
-                    # Clear the array first  
-                    for i in range(75):
+                    for i in range(75):  # clear
                         right_hand_pos_array[i] = 0.0
-                    # Set controller signals for right hand
-                    right_hand_pos_array[0] = 1.0 if tele_data.tele_state.right_aButton else 0.0  # A button
-                    right_hand_pos_array[1] = tele_data.right_trigger_value                        # Trigger (0.0-1.0)
-                    right_hand_pos_array[2] = 1.0 if tele_data.tele_state.right_bButton else 0.0  # B button (reserved)
+
+                    right_a = bool(getattr(tele_data.tele_state, "right_aButton", False))
+                    right_b = bool(getattr(tele_data.tele_state, "right_bButton", False))
+
+                    right_hand_pos_array[0] = 1.0 if right_a else 0.0                    # A: closes thumb
+                    right_hand_pos_array[1] = float(tele_data.right_trigger_value or 0.0)# Trigger: closes index
+                    right_hand_pos_array[2] = 1.0 if right_b else 0.0                    # B: closes both
             elif args.ee == "dex1" and args.xr_mode == "controller":
                 with left_gripper_value.get_lock():
                     left_gripper_value.value = tele_data.left_trigger_value

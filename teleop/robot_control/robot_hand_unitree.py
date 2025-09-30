@@ -79,6 +79,25 @@ class Dex3_1_Controller:
         self.INDEX_CLOSED = 1.7
         self.MIDDLE_OPEN = 0.0
         self.MIDDLE_CLOSED = 1.6 
+                # 7 DoF order: [thumb0, thumb1, thumb2, middle0, middle1, index0, index1]
+
+        # Signs: +1 means increasing q closes the joint; -1 means it opens (flip if mirrored)
+        self.RIGHT_SIGN = np.array([+1, +1, +1, +1, +1, +1, +1], dtype=float)
+        self.LEFT_SIGN  = np.array([+1, +1, +1, +1, +1, +1, +1], dtype=float)
+
+        # Zero offsets: angle (rad) that corresponds to a visually "open" neutral pose on each hand
+        # Start with zeros; we’ll tune left thumb if needed.
+        self.RIGHT_ZERO = np.zeros(7, dtype=float)
+        self.LEFT_ZERO  = np.zeros(7, dtype=float)
+
+        # If your left thumb flex joints look closed at q=0.0, bias them open here.
+        # Start conservatively; you can tweak live.
+        # Try a small positive offset for thumb1, thumb2 (the flex joints):
+        self.LEFT_ZERO[1] = 0.25   # thumb1 open bias
+        self.LEFT_ZERO[2] = 0.25   # thumb2 open bias
+
+        # If the left thumb twist (thumb0) rotates the wrong way, flip its sign:
+        # self.LEFT_SIGN[0] = -1.0
         if self.force:
             self.shared_array_size = 33  # [q0...q6, dq0...dq6, tau0...tau6, p0...p11]
         else:
@@ -184,103 +203,81 @@ class Dex3_1_Controller:
             return self.motor_mode
 
     def ctrl_dual_hand(self, left_q_target, right_q_target):
-        """set current left, right hand motor state target q"""
+        # Apply per-hand calibration: q_out = ZERO + SIGN * q_target
+        left_out  = self.LEFT_ZERO  + self.LEFT_SIGN  * np.asarray(left_q_target,  dtype=float)
+        right_out = self.RIGHT_ZERO + self.RIGHT_SIGN * np.asarray(right_q_target, dtype=float)
+
         for idx, id in enumerate(Dex3_1_Left_JointIndex):
-            self.left_msg.motor_cmd[id].q = left_q_target[idx]
+            self.left_msg.motor_cmd[id].q = float(left_out[idx])
         for idx, id in enumerate(Dex3_1_Right_JointIndex):
-            self.right_msg.motor_cmd[id].q = right_q_target[idx]
+            self.right_msg.motor_cmd[id].q = float(right_out[idx])
 
         self.LeftHandCmb_publisher.Write(self.left_msg)
         self.RightHandCmb_publisher.Write(self.right_msg)
-        # print("hand ctrl publish ok.")
+
     
-    def map_controller_to_joints_right(self, a_button_pressed, trigger_value):
+    def map_controller_to_joints_right(self, a_button_pressed: bool, trigger_value: float, b_button_pressed: bool = False):
         """
-        Map controller inputs to 7 joint positions for DEX3 hand.
-        
-        Args:
-            a_button_pressed: Boolean flag for A button (thumb+index close)
-            trigger_value: Float 0.0-1.0 from trigger (thumb+middle close)
-            b_button_pressed: Boolean flag for B button (reserved for future use)
-            is_left_hand: True for left hand, False for right hand
-            
-        Returns:
-            np.array: 7 joint positions mapped to hardware order [thumb0, thumb1, thumb2, middle0, middle1, index0, index1]
+        RIGHT hand, Dex3-1.
+        Joint order: [thumb0, thumb1, thumb2, middle0, middle1, index0, index1]
+        Behavior:
+        - Trigger: index closes proportionally
+        - A: thumb closes fully
+        - B: both thumb & index close (B has priority)
         """
-        q_target = np.zeros(7)  # Hardware order
-        
-        # Determine finger activation
-        thumb_from_a = a_button_pressed
-        thumb_from_trigger = trigger_value > 0.3
-        index_active = a_button_pressed
-        middle_active = trigger_value > 0.3
-        trigger_value = np.clip(trigger_value, 0.0, 1.0) #added threshold values for the triggers
-        # Calculate thumb closure (take maximum activation from either input)
-        if trigger_value > 0.3:
-            thumb_closure = trigger_value
-            q_target[0] = 0.0  # thumb0, np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])
-            q_target[1] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb1
-            q_target[2] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb2, it was '0.0' typically fixed
-            q_target[3] = 0.0
-            q_target[4] = 0.0
-            q_target[5] = 0.0 # index0
-            q_target[6] = 0.0  # index1 typically fixed
-            
-        # Calculate index closure from A button
-        if index_active:
-            q_target[5] = np.interp(1.0, [0.0, 1.0], [self.INDEX_OPEN, self.INDEX_CLOSED])  # index0
-            q_target[6] = 0.0  # index1 typically fixed
-            
-        # Calculate middle closure from trigger value (proportional)
-        #if middle_active:
-            #q_target[3] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle0
-            #q_target[4] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle1
-            
-        return q_target
+        q = np.zeros(7, dtype=float)
+
+        # sanitize inputs
+        tv = float(np.clip(trigger_value if trigger_value is not None else 0.0, 0.0, 1.0))
+        trigger_active = tv > 0.30
+
+        # PRIORITY: B button => BOTH
+        if b_button_pressed:
+            # Thumb closed fully
+            q[1] = self.THUMB_CLOSED
+            q[2] = self.THUMB_CLOSED
+            # Index closed fully (index1 kept at 0.0 by design)
+            q[5] = self.INDEX_CLOSED
+            return q
+
+        # A button => THUMB only (fully)
+        if a_button_pressed:
+            q[1] = self.THUMB_CLOSED
+            q[2] = self.THUMB_CLOSED
+            # leave index open unless trigger is also active
+
+        # Trigger => INDEX only (proportional)
+        if trigger_active:
+            q[5] = np.interp(tv, [0.0, 1.0], [self.INDEX_OPEN, self.INDEX_CLOSED])
+
+        # thumb0 (twist) and index1 remain 0.0; middle stays unused in this config
+        return q
     
-    def map_controller_to_joints_left(self, a_button_pressed, trigger_value):
+    def map_controller_to_joints_left(self, a_button_pressed: bool, trigger_value: float, b_button_pressed: bool = False):
         """
-        Map controller inputs to 7 joint positions for DEX3 hand.
-        
-        Args:
-            a_button_pressed: Boolean flag for A button (thumb+index close)
-            trigger_value: Float 0.0-1.0 from trigger (thumb+middle close)
-            b_button_pressed: Boolean flag for B button (reserved for future use)
-            is_left_hand: True for left hand, False for right hand
-            
-        Returns:
-            np.array: 7 joint positions mapped to hardware order [thumb0, thumb1, thumb2, middle0, middle1, index0, index1]
+        LEFT hand, Dex3-1.
+        Same behavior as RIGHT; left/right mechanical differences should be handled by
+        LEFT_SIGN/LEFT_ZERO calibration in ctrl_dual_hand().
         """
-        q_target = np.zeros(7)  # Hardware order
-        
-        # Determine finger activation
-        thumb_from_a = a_button_pressed
-        thumb_from_trigger = trigger_value > 0.3
-        index_active = a_button_pressed
-        middle_active = trigger_value > 0.3
-        trigger_value = np.clip(trigger_value, 0.0, 1.0) #added threshold values for the triggers
-        # Calculate thumb closure (take maximum activation from either input)
-        if trigger_value > 0.3:
-            thumb_closure = trigger_value
-            q_target[0] = 0.0  # thumb0, np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])
-            q_target[1] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb1
-            q_target[2] = np.interp(thumb_closure, [0.0, 1.0], [self.THUMB_OPEN, self.THUMB_CLOSED])  # thumb2, it was '0.0' typically fixed
-            q_target[3] = 0.0
-            q_target[4] = 0.0
-            q_target[5] = 0.0 # index0
-            q_target[6] = 0.0  # index1 typically fixed
-            
-        # Calculate index closure from A button
-        if index_active:
-            q_target[5] = np.interp(1.0, [0.0, 1.0], [self.INDEX_OPEN, self.INDEX_CLOSED])  # index0
-            q_target[6] = 0.0  # index1 typically fixed
-            
-        # Calculate middle closure from trigger value (proportional)
-        #if middle_active:
-            #q_target[3] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle0
-            #q_target[4] = np.interp(trigger_value, [0.0, 1.0], [self.MIDDLE_OPEN, self.MIDDLE_CLOSED])  # middle1
-            
-        return q_target
+        q = np.zeros(7, dtype=float)
+
+        tv = float(np.clip(trigger_value if trigger_value is not None else 0.0, 0.0, 1.0))
+        trigger_active = tv > 0.35  # slightly higher deadzone if your left trigger is noisier
+
+        if b_button_pressed:
+            q[1] = self.THUMB_CLOSED
+            q[2] = self.THUMB_CLOSED
+            q[5] = self.INDEX_CLOSED
+            return q
+
+        if a_button_pressed:
+            q[1] = self.THUMB_CLOSED
+            q[2] = self.THUMB_CLOSED
+
+        if trigger_active:
+            q[5] = np.interp(tv, [0.0, 1.0], [self.INDEX_OPEN, self.INDEX_CLOSED])
+
+        return q
     
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
