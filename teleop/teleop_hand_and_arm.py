@@ -371,6 +371,12 @@ if __name__ == '__main__':
             time_ik_end = time.time()
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+            camera_servo_states = None
+            if camera_controller and camera_controller.connected and camera_controller.head_tracking_enabled:
+                try:
+                    camera_servo_states = camera_controller.get_servo_states()
+                except Exception as e:
+                    logger.warning(f"Error reading active camera servo states: {e}")
 
             # record data
             if args.record:
@@ -431,7 +437,17 @@ if __name__ == '__main__':
                 left_arm_action = sol_q[:7]
                 right_arm_action = sol_q[-7:]
                 robot_vel_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.6, -tele_data.tele_state.left_thumbstick_value[0]  * 0.6, -tele_data.tele_state.right_thumbstick_value[0]  * 0.6]
-
+                if camera_servo_states:
+                    camera_current_pitch = camera_servo_states['current_pitch']
+                    camera_current_yaw = camera_servo_states['current_yaw']
+                    camera_target_pitch = camera_servo_states['target_pitch']
+                    camera_target_yaw = camera_servo_states['target_yaw']
+                else:
+                        # No camera data available
+                    camera_current_pitch = 0.0
+                    camera_current_yaw = 0.0
+                    camera_target_pitch = 0.0
+                    camera_target_yaw = 0.0
                 if is_recording:
                     colors = {}
                     depths = {}
@@ -440,8 +456,16 @@ if __name__ == '__main__':
                         # Save ONLY active camera + wrist cameras
                         # Split active cam (stereo side-by-side) into left/right
                         half_w = current_active_cam_image.shape[1] // 2
-                        colors["color_4"] = current_active_cam_image[:, :half_w]    # active left
-                        colors["color_5"] = current_active_cam_image[:, half_w:]    # active right
+                        left_active  = current_active_cam_image[:, :half_w]
+                        right_active = current_active_cam_image[:, half_w:]
+
+                        # Force old resolution (480x640 per half) regardless of SHM source size
+                        left_active  = cv2.resize(left_active,  (640, 480))
+                        right_active = cv2.resize(right_active, (640, 480))
+
+                        # Save active cams as color_0/1 (you asked to renumber to 0/1)
+                        colors["color_0"] = left_active
+                        colors["color_1"] = right_active
 
                         # Wrist cameras (if present), split left/right
                         if WRIST:
@@ -492,6 +516,19 @@ if __name__ == '__main__':
                         "body_vel": {
                             "qvel": robot_vel.tolist(), 
                         }
+                    }
+                    if args.active_camera and camera_servo_states:
+                        states["camera"] = {
+                            "qpos": [camera_current_pitch, camera_current_yaw],  # Current positions in radians
+                            "qvel": [],  # Velocity not available
+                            "torque": []  # Torque not available
+                        }
+                    else:
+                        # No camera data available
+                        states["camera"] = {
+                            "qpos": [],
+                            "qvel": [],
+                            "torque": []
                         }
                     actions = {
                         "left_arm": {                                   
@@ -522,6 +559,19 @@ if __name__ == '__main__':
                         
                         } 
                     }
+                    if args.active_camera and camera_servo_states:
+                        actions["camera"] = {
+                            "qpos": [camera_target_pitch, camera_target_yaw],  # Target positions in radians
+                            "qvel": [],
+                            "torque": []
+                        }
+                    else:
+                        # No camera data available
+                        actions["camera"] = {
+                            "qpos": [],
+                            "qvel": [],
+                            "torque": []
+                        }
                     if args.sim:
                         sim_state = sim_state_subscriber.read_data()            
                         recorder.add_item(colors=colors, depths=depths, states=states, actions=actions, sim_state=sim_state)
