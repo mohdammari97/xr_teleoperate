@@ -65,9 +65,9 @@ class G1_29_ArmController:
         self.tauff_target = np.zeros(14)
         self.motion_mode = motion_mode
         self.simulation_mode = simulation_mode
-        self.kp_high = 300.0
+        self.kp_high = 330.0
         self.kd_high = 3.0
-        self.kp_low = 80.0
+        self.kp_low = 120.0 #increase to make bring robot's arms higher
         self.kd_low = 3.0
         self.kp_wrist = 40.0
         self.kd_wrist = 1.5
