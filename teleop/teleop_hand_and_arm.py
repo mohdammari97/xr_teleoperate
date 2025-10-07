@@ -418,6 +418,10 @@ if __name__ == '__main__':
                     current_body_action = []
                 # head image
                 current_tv_image = tv_img_array.copy()
+                
+                # active camera image (for recording)
+                if args.use_active_cam:
+                    current_active_cam_image = active_cam_img_array.copy()
                 # wrist image
                 if WRIST:
                     current_wrist_image = wrist_img_array.copy()
@@ -431,17 +435,36 @@ if __name__ == '__main__':
                 if is_recording:
                     colors = {}
                     depths = {}
-                    if BINOCULAR:
-                        colors[f"color_{0}"] = current_tv_image[:, :tv_img_shape[1]//2]
-                        colors[f"color_{1}"] = current_tv_image[:, tv_img_shape[1]//2:]
+
+                    if args.use_active_cam:
+                        # Save ONLY active camera + wrist cameras
+                        # Split active cam (stereo side-by-side) into left/right
+                        half_w = current_active_cam_image.shape[1] // 2
+                        colors["color_4"] = current_active_cam_image[:, :half_w]    # active left
+                        colors["color_5"] = current_active_cam_image[:, half_w:]    # active right
+
+                        # Wrist cameras (if present), split left/right
                         if WRIST:
-                            colors[f"color_{2}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                            colors[f"color_{3}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                            half_w_wrist = wrist_img_shape[1] // 2
+                            colors["color_2"] = current_wrist_image[:, :half_w_wrist]   # wrist left
+                            colors["color_3"] = current_wrist_image[:, half_w_wrist:]   # wrist right
+
+                        # IMPORTANT: do NOT add color_0/color_1 (head/TV) here
                     else:
-                        colors[f"color_{0}"] = current_tv_image
-                        if WRIST:
-                            colors[f"color_{1}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                            colors[f"color_{2}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                        # No active camera -> keep head/TV (for completeness)
+                        if BINOCULAR:
+                            colors["color_0"] = current_tv_image[:, :tv_img_shape[1]//2]
+                            colors["color_1"] = current_tv_image[:, tv_img_shape[1]//2:]
+                            if WRIST:
+                                half_w_wrist = wrist_img_shape[1] // 2
+                                colors["color_2"] = current_wrist_image[:, :half_w_wrist]
+                                colors["color_3"] = current_wrist_image[:, half_w_wrist:]
+                        else:
+                            colors["color_0"] = current_tv_image
+                            if WRIST:
+                                half_w_wrist = wrist_img_shape[1] // 2
+                                colors["color_1"] = current_wrist_image[:, :half_w_wrist]
+                                colors["color_2"] = current_wrist_image[:, half_w_wrist:]
                     states = {
                         "left_arm": {                                                                    
                             "qpos":   left_arm_state.tolist(),    # numpy.array -> list
