@@ -23,6 +23,7 @@ from teleop.robot_control.robot_hand_brainco import Brainco_Controller
 from teleop.robot_control.active_head_cam import ActiveCameraController
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
+from teleop.utils.ipc import IPC_Server
 from sshkeyboard import listen_keyboard, stop_listening
 
 # for simulation
@@ -55,19 +56,21 @@ listen_keyboard_thread.start()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task_dir', type = str, default = './utils/data', help = 'path to save data')
-    parser.add_argument('--frequency', type = float, default = 60.0, help = 'save data\'s frequency')
+    parser.add_argument('--task_dir', type = str, default = './utils/data/', help = 'path to save data')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--ee', type=str, choices=['dex1', 'dex3', 'inspire1', 'brainco'], help='Select end effector controller')
     # mode flags
-    parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
+    
     parser.add_argument('--motion', action = 'store_true', help = 'Enable motion control mode')
     parser.add_argument('--headless', action='store_true', help='Enable headless mode (no display)')
     parser.add_argument('--sim', action = 'store_true', help = 'Enable isaac simulation mode')
-    
+    parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
+    parser.add_argument('--task-name', type = str, default = 'pick cube', help = 'task name for recording')
+    parser.add_argument('--task-goal', type = str, default = 'e.g. pick the red cube on the table.', help = 'task goal for recording')
     # Active Camera options
     parser.add_argument('--use-active-cam', action='store_true', default=False, help='Enable active camera head tracking')
     parser.add_argument('--camera-port', type=str, default="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT3R4A5A-if00-port0", 
@@ -270,9 +273,9 @@ if __name__ == '__main__':
     
     # record + headless mode
     if args.record and args.headless:
-        recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = False)
+        recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_goal, frequency = args.frequency, rerun_log = False)
     elif args.record and not args.headless:
-        recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
+        recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_goal, frequency = args.frequency, rerun_log = True)
         
     try:
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
