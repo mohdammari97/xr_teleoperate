@@ -23,7 +23,7 @@ from teleop.robot_control.robot_hand_brainco import Brainco_Controller
 from teleop.robot_control.active_head_cam import ActiveCameraController
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
-from teleop.utils.ipc import IPC_Server
+#from teleop.utils.ipc import IPC_Server
 from sshkeyboard import listen_keyboard, stop_listening
 
 # for simulation
@@ -53,11 +53,10 @@ def on_press(key):
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
 listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
 listen_keyboard_thread.start()
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data/', help = 'path to save data')
-    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 20.0, help = 'save data\'s frequency')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
@@ -374,6 +373,9 @@ if __name__ == '__main__':
             time_ik_end = time.time()
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+            robot_vel_action = arm_ctrl.get_velocity_commands() #unitree controller
+            #robot_vel_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.6, -tele_data.tele_state.left_thumbstick_value[0]  * 0.6, -tele_data.tele_state.right_thumbstick_value[0]  * 0.6] #metaquest controller
+            print(robot_vel_action)
             camera_servo_states = None
             if camera_controller and camera_controller.connected and camera_controller.head_tracking_enabled:
                 try:
@@ -381,6 +383,7 @@ if __name__ == '__main__':
                 except Exception as e:
                     logger.warning(f"Error reading active camera servo states: {e}")
 
+            
             # record data
             if args.record:
                 # dex hand or gripper
@@ -439,7 +442,8 @@ if __name__ == '__main__':
                 right_arm_state = current_lr_arm_q[-7:]
                 left_arm_action = sol_q[:7]
                 right_arm_action = sol_q[-7:]
-                robot_vel_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.6, -tele_data.tele_state.left_thumbstick_value[0]  * 0.6, -tele_data.tele_state.right_thumbstick_value[0]  * 0.6]
+                
+  
                 if camera_servo_states:
                     camera_current_pitch = camera_servo_states['current_pitch']
                     camera_current_yaw = camera_servo_states['current_yaw']
@@ -454,7 +458,8 @@ if __name__ == '__main__':
                 if is_recording:
                     colors = {}
                     depths = {}
-
+                    
+                    
                     if args.use_active_cam:
                         # Save ONLY active camera + wrist cameras
                         # Split active cam (stereo side-by-side) into left/right

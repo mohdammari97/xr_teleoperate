@@ -1,3 +1,4 @@
+import struct
 import numpy as np
 import threading
 import time
@@ -79,7 +80,8 @@ class G1_29_ArmController:
         self._speed_gradual_max = False
         self._gradual_start_time = None
         self._gradual_time = None
-
+        
+        self.controller_data = None
         self.robot_vel = [0.0, 0.0, 0.0]
 
         # initialize lowcmd publisher and lowstate subscriber
@@ -156,6 +158,7 @@ class G1_29_ArmController:
             msg = self.lowstate_subscriber.Read()
             msg_high = self.odometry_subscriber.Read()
             if msg is not None:
+                self.controller_data = msg.wireless_remote 
                 lowstate = G1_29_LowState()
                 for id in range(G1_29_Num_Motors):
                     lowstate.motor_state[id].q  = msg.motor_state[id].q
@@ -231,6 +234,29 @@ class G1_29_ArmController:
     
     def get_current_robot_velocity(self):
         return np.array(self.robot_vel)
+    
+    def get_velocity_commands(self):
+        #based on example script from unitree
+        lx_offset = 4
+        rx_offset = 8
+        ry_offset = 12
+        L2_offset = 16
+        ly_offset = 20
+        if self.controller_data is None:
+            return [0.0, 0.0, 0.0]
+        commands = {
+            "controller_side_vel": struct.unpack('<f', self.controller_data[lx_offset:lx_offset + 4])[0], #Lx
+            "controller_rot_vel": struct.unpack('<f', self.controller_data[rx_offset:rx_offset + 4])[0], #Rx
+            "Ry": struct.unpack('<f', self.controller_data[ry_offset:ry_offset + 4])[0],
+            "L2": struct.unpack('<f', self.controller_data[L2_offset:L2_offset + 4])[0], # Placeholder, unused
+            "controller_forward_vel": struct.unpack('<f', self.controller_data[ly_offset:ly_offset + 4])[0], #Ly
+        }
+        velocity_commands = [
+            commands["controller_forward_vel"], 
+            commands["controller_side_vel"], 
+            commands["controller_rot_vel"],  
+            ]
+        return velocity_commands
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
