@@ -519,11 +519,11 @@ if __name__ == '__main__':
                             "torque": [],  
                         }, 
                         "body": {
-                            "qpos": current_body_state,
+                            "qpos": [], #add odometry position later
+                            "qvel": robot_vel if isinstance(robot_vel, list) else robot_vel.tolist(),
+                            "torque": [],
                         }, 
-                        "body_vel": {
-                            "qvel": robot_vel.tolist(), 
-                        }
+                        
                     }
                     if args.active_camera and camera_servo_states:
                         states["camera"] = {
@@ -560,12 +560,11 @@ if __name__ == '__main__':
                             "torque": [], 
                         }, 
                         "body": {
-                            "qpos": current_body_action,
+                            "qpos": [], 
+                            "qvel": robot_vel_action if isinstance(robot_vel_action, list) else robot_vel_action.tolist(),
+                            "torque": [],
                         },
-                        "body_vel": {
-                            "qvel": robot_vel_action, 
                         
-                        } 
                     }
                     if args.active_camera and camera_servo_states:
                         actions["camera"] = {
