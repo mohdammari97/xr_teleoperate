@@ -56,7 +56,7 @@ listen_keyboard_thread.start()
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data/', help = 'path to save data')
-    parser.add_argument('--frequency', type = float, default = 20.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
@@ -375,7 +375,7 @@ if __name__ == '__main__':
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
             robot_vel_action = arm_ctrl.get_velocity_commands() #unitree controller
             #robot_vel_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.6, -tele_data.tele_state.left_thumbstick_value[0]  * 0.6, -tele_data.tele_state.right_thumbstick_value[0]  * 0.6] #metaquest controller
-            print(robot_vel_action)
+            #print(robot_vel_action)
             camera_servo_states = None
             if camera_controller and camera_controller.connected and camera_controller.head_tracking_enabled:
                 try:
@@ -530,7 +530,7 @@ if __name__ == '__main__':
                         },
                         
                     }
-                    if args.active_camera and camera_servo_states:
+                    if args.use_active_cam and camera_servo_states:
                         states["camera"] = {
                             "qpos": [camera_current_pitch, camera_current_yaw],  # Current positions in radians
                             "qvel": [],  # Velocity not available
@@ -576,7 +576,7 @@ if __name__ == '__main__':
                         },
                         
                     }
-                    if args.active_camera and camera_servo_states:
+                    if args.use_active_cam and camera_servo_states:
                         actions["camera"] = {
                             "qpos": [camera_target_pitch, camera_target_yaw],  # Target positions in radians
                             "qvel": [],
