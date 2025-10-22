@@ -366,7 +366,8 @@ if __name__ == '__main__':
 
             # get current robot velocity data from odometry subscriber
             robot_vel = arm_ctrl.get_current_robot_velocity()
-
+            # get current robot position data from odometry subscriber
+            robot_pos = arm_ctrl.get_current_robot_position()
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
             sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)

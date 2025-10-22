@@ -83,6 +83,7 @@ class G1_29_ArmController:
         
         self.controller_data = None
         self.robot_vel = [0.0, 0.0, 0.0]
+        self.robot_pos = [0.0, 0.0, 0.0]
 
         # initialize lowcmd publisher and lowstate subscriber
         if self.simulation_mode:
@@ -166,6 +167,7 @@ class G1_29_ArmController:
                 self.lowstate_buffer.SetData(lowstate)
             if msg_high is not None:
                 self.robot_vel = list(msg_high.velocity)
+                self.robot_pos = list(msg_high.position)
             time.sleep(0.002)
 
     def clip_arm_q_target(self, target_q, velocity_limit):
@@ -234,6 +236,9 @@ class G1_29_ArmController:
     
     def get_current_robot_velocity(self):
         return np.array(self.robot_vel)
+    
+    def get_current_robot_position(self):
+        return np.array(self.robot_pos)
     
     def get_velocity_commands(self):
         #based on example script from unitree
