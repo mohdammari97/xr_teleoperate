@@ -275,7 +275,6 @@ if __name__ == '__main__':
         recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_goal, frequency = args.frequency, rerun_log = False)
     elif args.record and not args.headless:
         recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_goal, frequency = args.frequency, rerun_log = True)
-    episode_start_position = None
 
     try:
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
@@ -320,15 +319,12 @@ if __name__ == '__main__':
                 if not is_recording:
                     if recorder.create_episode():
                         is_recording = True
-                        # Reset position reference at episode start
-                        episode_start_position = arm_ctrl.get_current_robot_position().copy()
-                        logger_mp.info(f"Episode started - position offset set to: {episode_start_position}")
+
                     else:
                         logger_mp.error("Failed to create episode. Recording not started.")
                 else:
                     is_recording = False
                     recorder.save_episode()
-                    logger_mp.info("Episode saved. Robot position will be reset when next episode starts.")
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
             # get input data
@@ -371,18 +367,9 @@ if __name__ == '__main__':
 
             # get current robot velocity data from odometry subscriber
             robot_vel = arm_ctrl.get_current_robot_velocity()
-            # get current robot position data from odometry subscriber (with relative positioning)
-            raw_robot_pos = arm_ctrl.get_current_robot_position()
+            # get current robot position data from odometry subscriber
+            robot_pos = arm_ctrl.get_current_robot_position()
 
-            # Calculate relative position if we have a start position
-            if episode_start_position is not None:
-                robot_pos = [
-                    raw_robot_pos[0] - episode_start_position[0],
-                    raw_robot_pos[1] - episode_start_position[1],
-                    raw_robot_pos[2] - episode_start_position[2]
-                ]
-            else:
-                robot_pos = raw_robot_pos
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
             sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
