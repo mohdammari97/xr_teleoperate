@@ -167,7 +167,14 @@ class G1_29_ArmController:
                 self.lowstate_buffer.SetData(lowstate)
             if msg_high is not None:
                 self.robot_vel = list(msg_high.velocity)
-                self.robot_pos = list(msg_high.position)
+                # Store raw position and calculate relative position
+                self.raw_robot_pos = list(msg_high.position)
+                # Calculate relative position by subtracting offset
+                self.robot_pos = [
+                    self.raw_robot_pos[0] - self.position_offset[0],
+                    self.raw_robot_pos[1] - self.position_offset[1], 
+                    self.raw_robot_pos[2] - self.position_offset[2]
+                ]
             time.sleep(0.002)
 
     def clip_arm_q_target(self, target_q, velocity_limit):
@@ -237,8 +244,21 @@ class G1_29_ArmController:
     def get_current_robot_velocity(self):
         return np.array(self.robot_vel)
     
-    def get_current_robot_position(self):
+    def reset_position_offset(self):
+        """Reset the position offset to current robot position, making relative position [0,0,0]"""
+        if self.raw_robot_pos:
+            self.position_offset = np.array(self.raw_robot_pos.copy())
+            logger_mp.info(f"Position offset reset to: {self.position_offset}")
+        else:
+            logger_mp.warning("Cannot reset position offset - no robot position data available")
+    
+    def get_current_robot_position_relative(self):
+        """Return current robot position relative to the last reset point"""
         return np.array(self.robot_pos)
+    
+    def get_current_robot_position_absolute(self):
+        """Return current robot position in absolute coordinates"""
+        return np.array(self.raw_robot_pos)
     
     def get_velocity_commands(self):
         #based on example script from unitree

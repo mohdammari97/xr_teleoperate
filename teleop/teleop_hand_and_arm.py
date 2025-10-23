@@ -319,12 +319,15 @@ if __name__ == '__main__':
                 if not is_recording:
                     if recorder.create_episode():
                         is_recording = True
+                        arm_ctrl.reset_position_offset()
+                        logger_mp.info("New episode started - robot position reset to relative [0,0,0]")
 
                     else:
                         logger_mp.error("Failed to create episode. Recording not started.")
                 else:
                     is_recording = False
                     recorder.save_episode()
+                    logger_mp.info("Episode saved. Robot position will be reset when next episode starts.")
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
             # get input data
@@ -367,8 +370,8 @@ if __name__ == '__main__':
 
             # get current robot velocity data from odometry subscriber
             robot_vel = arm_ctrl.get_current_robot_velocity()
-            # get current robot position data from odometry subscriber
-            robot_pos = arm_ctrl.get_current_robot_position()
+            # get current robot position data (now relative to episode start)
+            robot_pos = arm_ctrl.get_current_robot_position_relative()
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
