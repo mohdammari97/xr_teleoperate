@@ -527,7 +527,7 @@ if __name__ == '__main__':
                             "torque": [],
                         }, 
                         "odometry": {
-                            "qpos": robot_pos if isinstance(robot_pos, list) else robot_pos.tolist() , 
+                            "qpos": robot_pos if isinstance(robot_pos, list) else robot_pos.tolist(), 
                             "qvel": [],
                             "torque": [],
                         },
