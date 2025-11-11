@@ -380,7 +380,7 @@ if __name__ == '__main__':
             # high level control
             if args.xr_mode == "controller" and args.motion:
                 # quit teleoperate
-                if tele_data.tele_state.right_aButton:
+                if tele_data.tele_state.right_aButton and tele_data.tele_state.right_bButton:
                     stop_listening()
                     running = False
                 # command robot to enter damping mode. soft emergency stop function
@@ -399,7 +399,20 @@ if __name__ == '__main__':
             robot_vel = arm_ctrl.get_current_robot_velocity()
             # get current robot position data from odometry subscriber
             raw_robot_pos = arm_ctrl.get_current_robot_position()
-            
+
+            controller_combination = [
+                tele_data.left_trigger_value,
+                tele_data.right_trigger_value,
+                tele_data.tele_state.left_aButton,
+                tele_data.tele_state.left_bButton,
+                tele_data.tele_state.right_aButton,
+                tele_data.tele_state.right_bButton,
+                tele_data.tele_state.left_thumbstick_value,
+                tele_data.tele_state.right_thumbstick_value,
+                tele_data.tele_state.left_squeeze_ctrl_value,
+                tele_data.tele_state.right_squeeze_ctrl_value,
+            ]
+
             if episode_start_position is not None:
                 robot_pos = [
                     raw_robot_pos[0] - episode_start_position[0],
@@ -581,6 +594,12 @@ if __name__ == '__main__':
                             "qvel": [],
                             "torque": [],
                         },
+                        "controller": {
+                            "qpos": [v for v in controller_combination if v is not None], 
+                            "qvel": [],
+                            "torque": [],
+                        },
+
                         
                     }
                     if args.use_active_cam and camera_servo_states:

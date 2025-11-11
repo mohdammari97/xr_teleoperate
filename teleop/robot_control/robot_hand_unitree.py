@@ -452,7 +452,7 @@ class Dex3_1_Controller_console:
         self.RightHandState_subscriber = ChannelSubscriber(kTopicDex3RightState, HandState_)
         self.RightHandState_subscriber.Init()
 
-        # Shared Arrays for hand states从何处得到的呢
+        # Shared Arrays for hand states
         self.left_hand_state_array  = Array('d', Dex3_Num_Motors, lock=True)  #硬件写入
         self.right_hand_state_array = Array('d', Dex3_Num_Motors, lock=True)
 
@@ -522,17 +522,17 @@ class Dex3_1_Controller_console:
         right_q_target = np.full(Dex3_Num_Motors, 0)
         # 大拇指012：0°~+100°, -35°~+60°, -60°~+60°；
         # 食指34、中指56：0°~+90°，0°~+100°
-        # MAX_LIMITS_LEFT  = [1.05,  1.05,  1.75,  0.0,   0.0,   0.0,   0.0]
-        # MIN_LIMITS_LEFT  = [-1.05, -0.724, 0.0,  -1.57, -1.75, -1.57, -1.75]
+        # MAX_LIMITS_LEFT  = [-1.05, -0.742, 0.0,   0.0,   0.0,   0.0,   0.0]
+        # MIN_LIMITS_LEFT  = [1.05,  1.05,  1.75,   -1.57, -1.75, -1.57, -1.75]
 
-        # MAX_LIMITS_RIGHT = [1.05,  0.742,  0.0,   1.57,  1.75,  1.57,  1.75] 
-        # MIN_LIMITS_RIGHT = [-1.05, -1.05, -1.75,  0.0,   0.0,   0.0,   0.0]  
+        # MAX_LIMITS_RIGHT = [1.05,  0.742,  0.0,   0.0,   0.0,   0.0,   0.0] 
+        # MIN_LIMITS_RIGHT = [-1.05, -1.05, -1.75,  1.57,  1.75,  1.57,  1.75]  
 
-        MAX_LIMITS_LEFT  = [-1.05, -0.724, 0.0,   0.0,   0.0,   0.0,   0.0]
-        MIN_LIMITS_LEFT  = [1.05,  1.05,  1.75,   -1.57, -1.75, -1.57, -1.75]
+        MAX_LIMITS_LEFT  = [-0.05, -0.742, 0.0,   0.0,   0.0,   0.0,   0.0]
+        MIN_LIMITS_LEFT  = [0.05,  1.05,  1.75,   -1.57, -1.75, -1.57, -1.75]
 
-        MAX_LIMITS_RIGHT = [1.05,  0.742,  0.0,   0.0,   0.0,   0.0,   0.0] 
-        MIN_LIMITS_RIGHT = [-1.05, -1.05, -1.75,  1.57,  1.75,  1.57,  1.75]  
+        MAX_LIMITS_RIGHT = [0.05,  0.742,  0.0,   0.0,   0.0,   0.0,   0.0] 
+        MIN_LIMITS_RIGHT = [-0.05, -1.05, -1.75,  1.57,  1.75,  1.57,  1.75]  
 
         mid_limits_left  = [(max_v + min_v) / 2.0 for max_v, min_v in zip(MAX_LIMITS_LEFT,  MIN_LIMITS_LEFT)]
         mid_limits_right = [(max_v + min_v) / 2.0 for max_v, min_v in zip(MAX_LIMITS_RIGHT, MIN_LIMITS_RIGHT)]
@@ -657,16 +657,24 @@ class Dex3_1_Controller_console:
                         right_target_action[i] = np.interp(right_hand_value, [0, 10], [MIN_LIMITS_RIGHT[i], MAX_LIMITS_RIGHT[i]])
                     
                     if left_a_pressed:
+                        left_target_action[0] = 1.05
+                        left_target_action[2] = 1.05
                         left_target_action[3] = 0.0
                         left_target_action[4] = 0.0
                     if left_b_pressed:
+                        left_target_action[0] = -1.05
+                        left_target_action[2] = 1.05
                         left_target_action[5] = 0.0
                         left_target_action[6] = 0.0
 
                     if right_a_pressed:
+                        right_target_action[0] = 1.05
+                        right_target_action[2] = -1.05
                         right_target_action[3] = 0.0
                         right_target_action[4] = 0.0
                     if right_b_pressed:
+                        right_target_action[0] = -1.05
+                        right_target_action[2] = -1.05
                         right_target_action[5] = 0.0
                         right_target_action[6] = 0.0
                     # clip dual gripper action to avoid overflow
@@ -700,6 +708,8 @@ class Dex3_1_Controller_console:
                 time.sleep(sleep_time)
         finally:
             logger_mp.info("Dex3_1_Controller has been closed.")
+
+
 
 class Dex3_1_Left_JointIndex(IntEnum):
     kLeftHandThumb0 = 0
