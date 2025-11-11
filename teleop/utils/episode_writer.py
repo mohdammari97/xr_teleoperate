@@ -11,7 +11,7 @@ import logging_mp
 logger_mp = logging_mp.get_logger(__name__)
 
 class EpisodeWriter():
-    def __init__(self, task_dir, task_goal = None, frequency=30, image_size=[640, 480], rerun_log = True):
+    def __init__(self, task_dir, task_goal = None, frequency=20, image_size=[640, 480], rerun_log = True):
         """
         image_size: [width, height]
         """
