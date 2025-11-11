@@ -657,23 +657,23 @@ class Dex3_1_Controller_console:
                         right_target_action[i] = np.interp(right_hand_value, [0, 10], [MIN_LIMITS_RIGHT[i], MAX_LIMITS_RIGHT[i]])
                     
                     if left_a_pressed:
-                        left_target_action[0] = 1.05
+                        left_target_action[0] = -0.75
                         left_target_action[2] = 1.05
                         left_target_action[3] = 0.0
                         left_target_action[4] = 0.0
                     if left_b_pressed:
-                        left_target_action[0] = -1.05
+                        left_target_action[0] = 0.95
                         left_target_action[2] = 1.05
                         left_target_action[5] = 0.0
                         left_target_action[6] = 0.0
 
                     if right_a_pressed:
-                        right_target_action[0] = 1.05
+                        right_target_action[0] = -0.75
                         right_target_action[2] = -1.05
                         right_target_action[3] = 0.0
                         right_target_action[4] = 0.0
                     if right_b_pressed:
-                        right_target_action[0] = -1.05
+                        right_target_action[0] = 0.95
                         right_target_action[2] = -1.05
                         right_target_action[5] = 0.0
                         right_target_action[6] = 0.0
