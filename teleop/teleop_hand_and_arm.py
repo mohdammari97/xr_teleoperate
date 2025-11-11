@@ -595,7 +595,7 @@ if __name__ == '__main__':
                             "torque": [],
                         },
                         "controller": {
-                            "qpos": [v for v in controller_combination if v is not None], 
+                            "qpos": [], #controller_combination if isinstance(controller_combination, list) else controller_combination.tolist(), 
                             "qvel": [],
                             "torque": [],
                         },
