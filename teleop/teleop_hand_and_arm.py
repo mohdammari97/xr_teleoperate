@@ -525,6 +525,8 @@ if __name__ == '__main__':
                         # Save active cams as color_0/1 (you asked to renumber to 0/1)
                         colors["color_0"] = left_active
                         colors["color_1"] = right_active
+                        colors["color_4"] = current_tv_image[:, :tv_img_shape[1]//2]  # head camera left
+                        colors["color_5"] = current_tv_image[:, tv_img_shape[1]//2:]
 
                         # Wrist cameras (if present), split left/right
                         if WRIST:
