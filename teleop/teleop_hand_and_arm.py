@@ -696,11 +696,7 @@ if __name__ == '__main__':
                             "qvel": robot_vel_action if isinstance(robot_vel_action, list) else robot_vel_action.tolist(),
                             "torque": [],
                         },
-                        "odometry": {
-                            "qpos": [], #keep empty for now
-                            "qvel": [],
-                            "torque": [],
-                        },
+                        
                     }
                     if args.sim:
                         sim_state = sim_state_subscriber.read_data()            
