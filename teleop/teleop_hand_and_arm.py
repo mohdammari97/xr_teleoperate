@@ -186,7 +186,7 @@ def teledata_to_list(tele_data):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--frequency', type = float, default = 20.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
@@ -200,7 +200,7 @@ if __name__ == '__main__':
     parser.add_argument('--ipc', action = 'store_true', help = 'Enable IPC server to handle input; otherwise enable sshkeyboard')
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
     parser.add_argument('--task-dir', type = str, default = './utils/data/', help = 'path to save data')
-    parser.add_argument('--task-name', type = str, default = 'brown bag', help = 'task name for recording')
+    parser.add_argument('--task-name', type = str, default = 'standing_brown_bag', help = 'task name for recording')
     parser.add_argument('--task-desc', type = str, default = 'Pick up one brown bag and put it on the metal tray.', help = 'task goal for recording')
 
     parser.add_argument('--move-image', action='store_true', default=False, help='Enable active image head tracking')
