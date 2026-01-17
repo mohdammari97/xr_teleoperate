@@ -148,13 +148,12 @@ def update_move_image_from_tv(tv_img_array, move_image_img_array, dx, dy):
 
 
 def teledata_to_list(tele_data):
-    # 6 parameters  
     result = []
-    # result.extend(tele_data.head_pose.flatten().tolist())
+    result.extend(tele_data.head_pose.flatten().tolist())
 
     for val in [
-        # tele_data.left_pinch_value,
-        # tele_data.right_pinch_value,
+        tele_data.left_pinch_value,
+        tele_data.right_pinch_value,
         tele_data.left_trigger_value,
         tele_data.right_trigger_value
     ]:
@@ -164,29 +163,25 @@ def teledata_to_list(tele_data):
     s = tele_data.tele_state
 
 
-    # bools = [
-    #     s.left_pinch_state, s.left_squeeze_state,
-    #     s.right_pinch_state, s.right_squeeze_state,
-    #     s.left_trigger_state, s.left_squeeze_ctrl_state,
-    #     s.left_thumbstick_state, s.left_aButton, s.left_bButton,
-    #     s.right_trigger_state, s.right_squeeze_ctrl_state,
-    #     s.right_thumbstick_state, s.right_aButton, s.right_bButton,
-    # ]
     bools = [
-        s.left_aButton, s.left_bButton,
-        s.right_aButton, s.right_bButton,
+        s.left_pinch_state, s.left_squeeze_state,
+        s.right_pinch_state, s.right_squeeze_state,
+        s.left_trigger_state, s.left_squeeze_ctrl_state,
+        s.left_thumbstick_state, s.left_aButton, s.left_bButton,
+        s.right_trigger_state, s.right_squeeze_ctrl_state,
+        s.right_thumbstick_state, s.right_aButton, s.right_bButton,
     ]
     result.extend([float(b) for b in bools])
 
-    # result.extend(s.left_thumbstick_value.tolist())
-    # result.extend(s.right_thumbstick_value.tolist())
+    result.extend(s.left_thumbstick_value.tolist())
+    result.extend(s.right_thumbstick_value.tolist())
 
     return result
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--frequency', type = float, default = 20.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
@@ -644,6 +639,11 @@ if __name__ == '__main__':
                             "qvel":   [],                           
                             "torque": [],  
                         }, 
+                        "head_offset": {
+                            "qpos": [dx, dy],
+                            "qvel": [],
+                            "torque": []
+                        },
                         "body_vel": {
                             "qpos": [],
                             "qvel": robot_vel if isinstance(robot_vel, list) else robot_vel.tolist(),
@@ -654,18 +654,11 @@ if __name__ == '__main__':
                             "qvel": [],
                             "torque": [],
                         },
-                        "head_offset": {
-                            "qpos": [dx, dy],
-                            "qvel": [],
-                            "torque": []
-                        },
-                        
                         "controller": {
                             "qpos": controller_combination, #controller_combination if isinstance(controller_combination, list) else controller_combination.tolist(), 
                             "qvel": [],
                             "torque": [],
                         },
-                        
                     }
                     actions = {
                         "left_arm": {                                   
@@ -688,12 +681,6 @@ if __name__ == '__main__':
                             "qvel":   [],       
                             "torque": [], 
                         }, 
-                        "body_vel": {
-                            "qpos": [], 
-                            "qvel": robot_vel_action if isinstance(robot_vel_action, list) else robot_vel_action.tolist(),
-                            "torque": [],
-                        },
-
                         "head_offset": {
                             "qpos": [delta_dx, delta_dy],   # camera “look” action
                             "qvel": [],
@@ -704,17 +691,12 @@ if __name__ == '__main__':
                             "qvel": [],
                             "torque": [],
                         },
-                        
-                        # "odometry": {
-                        #     "qpos": [], #keep empty for now
-                        #     "qvel": [],
-                        #     "torque": [],
-                        # },
-                        "controller": {
-                            "qpos": controller_combination, #controller_combination if isinstance(controller_combination, list) else controller_combination.tolist(), 
-                            "qvel": [],
+                        "body_vel": {
+                            "qpos": [], 
+                            "qvel": robot_vel_action if isinstance(robot_vel_action, list) else robot_vel_action.tolist(),
                             "torque": [],
                         },
+                        
                     }
                     if args.sim:
                         sim_state = sim_state_subscriber.read_data()            
