@@ -199,7 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--affinity', action = 'store_true', help = 'Enable high priority and set CPU affinity')
     parser.add_argument('--ipc', action = 'store_true', help = 'Enable IPC server to handle input; otherwise enable sshkeyboard')
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
-    parser.add_argument('--task-dir', type = str, default = './utils/data/', help = 'path to save data')
+    parser.add_argument('--task-dir', type = str, default = '/media/mohdammari97/PortableSSD/standing_brown_bag/', help = 'path to save data')
     parser.add_argument('--task-name', type = str, default = 'standing_brown_bag', help = 'task name for recording')
     parser.add_argument('--task-desc', type = str, default = 'Pick up one brown bag and put it on the metal tray.', help = 'task goal for recording')
 
@@ -610,8 +610,8 @@ if __name__ == '__main__':
 
                         colors["color_4"] = left_up
                         colors["color_5"] = right_up
-                        colors["color_6"] = left_raw
-                        colors["color_7"] = right_raw
+                        #colors["color_6"] = left_raw
+                        #colors["color_7"] = right_raw
                     if BINOCULAR:
                         colors[f"color_{0}"] = current_tv_image[:, :tv_img_shape[1]//2]
                         colors[f"color_{1}"] = current_tv_image[:, tv_img_shape[1]//2:]
